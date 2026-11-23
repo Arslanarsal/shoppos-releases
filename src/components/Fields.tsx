@@ -196,6 +196,7 @@ export function GroupedFields(props: {
   values: Record<string, any>;
   keyOf: (f: FieldDef) => string;
   onChange: (key: string, v: any) => void;
+  onEditField?: (f: FieldDef) => void;
 }) {
   const [q, setQ] = useState("");
   const many = props.fields.length > 30;
@@ -240,9 +241,16 @@ export function GroupedFields(props: {
             {shown.length > 0 && (
               <div className="grid2">
                 {shown.map((f) => (
-                  <Label key={props.keyOf(f)} text={f.name + (f.archived ? " (archived)" : "")} required={f.required}>
-                    <FieldInput def={f} value={props.values[props.keyOf(f)]} onChange={(v) => props.onChange(props.keyOf(f), v)} />
-                  </Label>
+                  <div key={props.keyOf(f)} className="field-cell">
+                    <Label text={f.name + (f.archived ? " (archived)" : "")} required={f.required}>
+                      <FieldInput def={f} value={props.values[props.keyOf(f)]} onChange={(v) => props.onChange(props.keyOf(f), v)} />
+                    </Label>
+                    {props.onEditField && f.id > 0 && (
+                      <button type="button" className="field-change" onClick={() => props.onEditField!(f)} title="Change name or type" data-testid={`field-change-${f.name}`}>
+                        Change
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}

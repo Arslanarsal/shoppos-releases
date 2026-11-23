@@ -39,6 +39,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [added, setAdded] = useState<PhotoRef[]>([]);
   const [fieldModal, setFieldModal] = useState(false);
+  const [editField, setEditField] = useState<FieldDef | null>(null);
   const [catModal, setCatModal] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -233,10 +234,9 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           </fieldset>
         )}
 
-        <fieldset className="scope stock-now" data-testid="stock-section">
-          <legend>{tracking === "unique" ? "Number and prices" : "Prices and stock"}</legend>
+        {(tracking === "unique" || (editing && identifier)) && (
           <div className="grid4">
-            <Label text={tracking === "unique" ? "Chassis / serial number" : "Item code (optional)"} required={tracking === "unique"}>
+            <Label text={tracking === "unique" ? "Chassis / serial number" : "Item code"} required={tracking === "unique"}>
               <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} className={taken ? "input-bad" : ""} data-testid="item-identifier" />
               {taken && (
                 <span className="field-error" data-testid="identifier-taken">
@@ -244,6 +244,11 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
                 </span>
               )}
             </Label>
+          </div>
+        )}
+        <fieldset className="scope stock-now" data-testid="stock-section">
+          <legend>{tracking === "unique" ? "Prices" : "Prices and stock"}</legend>
+          <div className="grid4">
             {tracking === "quantity" && !editing && (
               <Label text="Quantity (pieces)">
                 <input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" data-testid="item-qty" />
@@ -306,7 +311,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           </button>
         </div>
         {allFields.length === 0 && <p className="muted">{categoryId ? "No fields yet. Press Add a field to record details like size, material or model year." : "Choose a category to see its fields."}</p>}
-        <GroupedFields fields={allFields} values={values} keyOf={keyOf} onChange={(k, v) => setValues((x) => ({ ...x, [k]: v }))} />
+        <GroupedFields fields={allFields} values={values} keyOf={keyOf} onChange={(k, v) => setValues((x) => ({ ...x, [k]: v }))} onEditField={setEditField} />
 
         <Label text="Notes">
           <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -329,6 +334,26 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           groups={groups}
           onSave={saveField}
           onClose={() => setFieldModal(false)}
+        />
+      )}
+      {editField && (
+        <FieldEditor
+          initial={editField}
+          groups={groups}
+          onSave={async (d) => {
+            const { scope: _scope, ...patch } = d as any;
+            const f = await call<FieldDef>("field_update", { id: editField.id, patch });
+            const swap = (list: FieldDef[]) => list.map((x) => (x.id === f.id ? f : x));
+            setCatFields(swap);
+            setItemFields(swap);
+            setValues((v) => {
+              const k = String(f.id);
+              if (v[k] === undefined || v[k] === null || f.kind === editField.kind) return v;
+              return { ...v, [k]: ["text", "longtext", "choice", "date", "decimal"].includes(f.kind) ? String(v[k]) : v[k] };
+            });
+            toast(`Field "${f.name}" changed`);
+          }}
+          onClose={() => setEditField(null)}
         />
       )}
       {catModal && (

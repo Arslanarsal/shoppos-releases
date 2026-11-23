@@ -667,3 +667,29 @@ fn saved_photos_can_never_be_removed() {
     assert!(db.execute("DELETE FROM photos", []).is_err());
     assert_eq!(ok(&core, "item_get", json!({ "id": id }))["photos"].as_array().unwrap().len(), 1);
 }
+
+#[test]
+fn field_type_can_change_and_values_are_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let cat = ok(&core, "category_create", json!({ "name": "Bikes" }))["id"].as_i64().unwrap();
+    let f = ok(&core, "field_create", json!({ "category_id": cat, "name": "Model", "kind": "int" }));
+    let fid = f["id"].as_i64().unwrap();
+    let key = fid.to_string();
+    let a = ok(&core, "item_save", json!({ "category_id": cat, "name": "Bike A", "values": { key.clone(): 2019 } }))["item"]["id"].as_i64().unwrap();
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "Bike B", "values": { key.clone(): 2021 } }));
+    let e = err(&core, "item_save", json!({ "category_id": cat, "name": "Bike C", "values": { key.clone(): "CD-70 2022" } }));
+    assert!(e.contains("takes a whole number") && e.contains("Change"), "{e}");
+    ok(&core, "field_update", json!({ "id": fid, "patch": { "kind": "text" } }));
+    assert_eq!(ok(&core, "item_get", json!({ "id": a }))["values"][&key], "2019", "old number kept as text");
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "Bike C", "values": { key.clone(): "CD-70 2022" } }));
+    let back = err(&core, "field_update", json!({ "id": fid, "patch": { "kind": "int" } }));
+    assert!(back.contains("CD-70 2022") && back.contains("Bike C"), "{back}");
+    assert_eq!(ok(&core, "item_get", json!({ "id": a }))["values"][&key], "2019", "refused change leaves values as they were");
+    let m = ok(&core, "field_create", json!({ "category_id": cat, "name": "Paid", "kind": "money" }))["id"].as_i64().unwrap();
+    ok(&core, "item_save", json!({ "id": a, "category_id": cat, "name": "Bike A", "values": { m.to_string(): 120050 } }));
+    ok(&core, "field_update", json!({ "id": m, "patch": { "kind": "text" } }));
+    assert_eq!(ok(&core, "item_get", json!({ "id": a }))["values"][&m.to_string()], "1200.50");
+    ok(&core, "field_update", json!({ "id": m, "patch": { "kind": "money" } }));
+    assert_eq!(ok(&core, "item_get", json!({ "id": a }))["values"][&m.to_string()], 120050);
+}

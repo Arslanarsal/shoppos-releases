@@ -248,14 +248,30 @@ pub fn field_update(conn: &Connection, id: i64, patch: &Map<String, Value>) -> R
     }
     let after: FieldDef = serde_json::from_value(merged)?;
     let after = validate_def(&after)?;
-    if after.kind != before.kind {
-        let used: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM item_values WHERE field_id=?1 AND (v_text IS NOT NULL OR v_int IS NOT NULL OR v_num IS NOT NULL)",
-            [id],
-            |r| r.get(0),
-        )?;
-        if used > 0 {
-            return user("This field already has saved values, so its type cannot change. Archive it and create a new field instead.");
+    let mut converted: Vec<(i64, Option<Stored>)> = Vec::new();
+    if after.kind != before.kind || after.options != before.options {
+        let rows: Vec<(i64, Option<String>, Option<i64>, String)> = conn
+            .prepare(
+                "SELECT v.item_id, v.v_text, v.v_int, i.name FROM item_values v JOIN items i ON i.id=v.item_id
+                 WHERE v.field_id=?1 AND (v.v_text IS NOT NULL OR v.v_int IS NOT NULL OR v.v_num IS NOT NULL)",
+            )?
+            .query_map([id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+            .collect::<std::result::Result<_, _>>()?;
+        let mut bad = Vec::new();
+        for (item_id, t, i, item_name) in rows {
+            let text = value_as_plain_text(&before.kind, t, i);
+            match plain_text_to_stored(&after, &text) {
+                Ok(v) => converted.push((item_id, v)),
+                Err(_) => bad.push(format!("\"{text}\" on {item_name}")),
+            }
+        }
+        if !bad.is_empty() {
+            let more = if bad.len() > 3 { format!(" and {} more", bad.len() - 3) } else { String::new() };
+            return user(format!(
+                "Some saved values cannot become {}: {}{more}. Choose Text instead, or change those values first.",
+                kind_label(&after.kind),
+                bad.into_iter().take(3).collect::<Vec<_>>().join(", ")
+            ));
         }
     }
     if after.name.to_lowercase() != before.name.to_lowercase() {
@@ -277,8 +293,17 @@ pub fn field_update(conn: &Connection, id: i64, patch: &Map<String, Value>) -> R
             after.show_in_list, after.show_on_receipt, id
         ],
     )?;
+    for (item_id, v) in &converted {
+        match v {
+            Some(st) => conn.execute(
+                "UPDATE item_values SET v_text=?1, v_int=?2, v_num=?3 WHERE item_id=?4 AND field_id=?5",
+                params![st.v_text, st.v_int, st.v_num, item_id, id],
+            )?,
+            None => conn.execute("UPDATE item_values SET v_text=NULL, v_int=NULL, v_num=NULL WHERE item_id=?1 AND field_id=?2", params![item_id, id])?,
+        };
+    }
     let f = field_get(conn, id)?;
-    audit(conn, "field", Some(id), "update", &json!({ "from": before, "to": f }))?;
+    audit(conn, "field", Some(id), "update", &json!({ "from": before, "to": f, "values_converted": converted.len() }))?;
     Ok(f)
 }
 
@@ -358,7 +383,7 @@ pub fn to_stored(def: &FieldDef, v: &Value) -> Result<Option<Stored>> {
     if empty {
         return Ok(None);
     }
-    let bad = || Error::User(format!("\"{}\" has a value that does not fit its type ({})", def.name, def.kind));
+    let bad = || Error::User(format!("\"{}\" takes {}. To type letters there, press Change next to \"{}\" and choose Text.", def.name, kind_label(&def.kind), def.name));
     let s = match def.kind.as_str() {
         "text" | "longtext" => Stored { v_text: Some(as_text(v)), v_int: None, v_num: None },
         "choice" => {
@@ -408,6 +433,40 @@ pub fn to_stored(def: &FieldDef, v: &Value) -> Result<Option<Stored>> {
         _ => return Err(bad()),
     };
     Ok(Some(s))
+}
+
+fn kind_label(k: &str) -> &'static str {
+    match k {
+        "int" => "a whole number",
+        "decimal" => "a number",
+        "money" => "an amount of money",
+        "date" => "a date",
+        "bool" => "yes / no",
+        "choice" => "one of the choices",
+        _ => "text",
+    }
+}
+
+fn value_as_plain_text(kind: &str, t: Option<String>, i: Option<i64>) -> String {
+    match kind {
+        "money" => i.map(|c| if c % 100 == 0 { (c / 100).to_string() } else { format!("{}.{:02}", c / 100, (c % 100).abs()) }).unwrap_or_default(),
+        "bool" => i.map(|b| if b == 1 { "Yes".into() } else { "No".into() }).unwrap_or_default(),
+        "int" => i.map(|n| n.to_string()).unwrap_or_default(),
+        _ => t.unwrap_or_default(),
+    }
+}
+
+fn plain_text_to_stored(def: &FieldDef, text: &str) -> Result<Option<Stored>> {
+    if def.kind == "money" {
+        let d = normalize_decimal(&text.replace(',', "")).ok_or_else(|| Error::User("not money".into()))?;
+        let (w, f) = d.split_once('.').unwrap_or((&d, ""));
+        if f.len() > 2 {
+            return user("too many decimals");
+        }
+        let cents = w.parse::<i64>().map_err(|_| Error::User("not money".into()))? * 100 + format!("{f:0<2}").parse::<i64>().unwrap_or(0) * if w.starts_with('-') { -1 } else { 1 };
+        return to_stored(def, &Value::from(cents));
+    }
+    to_stored(def, &Value::String(text.to_string()))
 }
 
 fn as_text(v: &Value) -> String {

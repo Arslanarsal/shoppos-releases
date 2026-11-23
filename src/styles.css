@@ -1447,3 +1447,21 @@ details summary {
 .trade-photo img {
   cursor: zoom-in;
 }
+
+.field-cell {
+  position: relative;
+}
+.field-change {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.field-change:hover {
+  text-decoration: underline;
+}

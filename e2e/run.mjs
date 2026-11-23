@@ -478,6 +478,18 @@ async function main() {
     check((await page.textContent(".alert-error")).includes("must be different"), "same chassis number (typed differently) is refused");
     await page.fill('[data-testid="item-identifier"]', "CD-555");
     await page.locator('[data-testid="identifier-taken"]').waitFor({ state: "detached" });
+    await page.click('[data-testid="add-field"]');
+    await page.fill('[data-testid="field-name"]', "Engine");
+    await page.selectOption('[data-testid="field-kind"]', "int");
+    await page.check('[data-testid="scope-category"]');
+    await page.click('[data-testid="field-save"]');
+    await page.locator('[data-field="Engine"]').waitFor();
+    await page.click('[data-testid="field-change-Engine"]');
+    await page.selectOption('[data-testid="field-kind"]', "text");
+    await page.click('[data-testid="field-save"]');
+    await page.locator(".toast", { hasText: 'Field "Engine" changed' }).waitFor();
+    await page.fill('[data-field="Engine"]', "70cc Euro 2");
+    check((await page.locator('[data-testid="stock-section"] [data-testid="item-identifier"]').count()) === 0, "chassis number has its own row, not in the price row");
     await page.fill('[data-testid="item-buy-price"]', "90000");
     await page.fill('[data-testid="item-price"]', "120000");
     check((await page.textContent('[data-testid="stock-preview"]')).includes("Profit Rs 30,000"), "one of a kind: chassis, buy price, selling price and profit on one row");
@@ -486,6 +498,7 @@ async function main() {
     await page.locator('[data-testid="stock-now"]', { hasText: "1" }).waitFor();
     const cd = (await api(portA, "item_search", { text: "CD-555" })).data.rows[0];
     check(cd.stock === 1 && cd.money.bought_cost === 9000000, "scooter saved in stock, bought at Rs 90,000");
+    check((await page.textContent('dd[data-field-value="Engine"]')) === "70cc Euro 2", "field changed from Number to Text while adding the item, letters saved");
     await page.goto(base + `#/item/${cd.id}/edit`);
     await page.locator('[data-testid="item-buy-price"]').waitFor();
     await page.waitForFunction(() => document.querySelector('[data-testid="item-buy-price"]').value === "90000");
