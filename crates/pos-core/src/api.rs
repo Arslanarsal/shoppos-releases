@@ -540,7 +540,7 @@ fn item_get(c: &Connection, id: i64) -> Result<Value> {
     let cat = item["category_id"].as_i64().unwrap_or(0);
     let fields = catalog::item_fields(c, id, cat)?;
     let values = catalog::item_values(c, id)?;
-    let photos = catalog::item_photos(c, id, false)?;
+    let photos = catalog::item_photos(c, id, true)?;
     let (qty, value) = stock::stock_on(c, id, None)?;
     let money = reports::item_money(c, id)?;
     Ok(json!({ "item": item, "fields": fields, "values": values, "photos": photos, "stock": { "qty": qty, "value": value }, "money": money }))

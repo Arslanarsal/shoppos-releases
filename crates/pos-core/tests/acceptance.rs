@@ -649,3 +649,21 @@ fn old_receipts_open_the_same_after_every_upgrade() {
     assert_eq!(added["photos"].as_array().unwrap().len(), 2);
     assert_eq!(added["total"], sale["total"]);
 }
+
+#[test]
+fn saved_photos_can_never_be_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let cat = ok(&core, "category_create", json!({ "name": "Scooter" }))["id"].as_i64().unwrap();
+    let p = ok(&core, "photo_store", json!({ "name": "bike.jpg", "data": b64(&jpeg(3)) }));
+    let id = ok(&core, "item_save", json!({ "category_id": cat, "name": "Vespa", "add_photos": [p] }))["item"]["id"].as_i64().unwrap();
+    let got = ok(&core, "item_get", json!({ "id": id }));
+    let pid = got["photos"][0]["id"].as_i64().unwrap();
+    let e = err(&core, "item_save", json!({ "id": id, "category_id": cat, "name": "Vespa", "archive_photo_ids": [pid] }));
+    assert!(e.contains("cannot be removed"));
+    let db = rusqlite::Connection::open(dir.path().join("shop.db")).unwrap();
+    assert!(db.execute("UPDATE photos SET archived_at='x'", []).is_err());
+    assert!(db.execute("UPDATE photos SET file='photos/other.jpg'", []).is_err());
+    assert!(db.execute("DELETE FROM photos", []).is_err());
+    assert_eq!(ok(&core, "item_get", json!({ "id": id }))["photos"].as_array().unwrap().len(), 1);
+}

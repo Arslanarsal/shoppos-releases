@@ -38,7 +38,6 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
   const [newFields, setNewFields] = useState<{ key: string; def: FieldDef }[]>([]);
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [added, setAdded] = useState<PhotoRef[]>([]);
-  const [removed, setRemoved] = useState<number[]>([]);
   const [fieldModal, setFieldModal] = useState(false);
   const [catModal, setCatModal] = useState(false);
   const [error, setError] = useState("");
@@ -140,7 +139,6 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
         values,
         new_fields: newFields.map((n) => ({ key: n.key, ...n.def })),
         add_photos: added,
-        archive_photo_ids: removed,
       });
       if (q && bp !== null) {
         try {
@@ -167,7 +165,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
     }
   };
 
-  const shownPhotos = [...photos.filter((p) => !removed.includes(p.id!)), ...added];
+  const shownPhotos = [...photos, ...added];
 
   return (
     <div className="page">
@@ -179,13 +177,13 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           {shownPhotos.map((p, i) => (
             <div key={p.file + i} className="photo-tile">
               <img src={fileUrl(p.file)} alt={p.original_name} />
-              <button
-                type="button"
-                className="btn btn-small"
-                onClick={() => (p.id ? setRemoved((r) => [...r, p.id!]) : setAdded((a) => a.filter((x) => x !== p)))}
-              >
-                Hide
-              </button>
+              {p.id ? (
+                <span className="muted small">Saved</span>
+              ) : (
+                <button type="button" className="btn btn-small" onClick={() => setAdded((a) => a.filter((x) => x !== p))} title="Not saved yet">
+                  Take off
+                </button>
+              )}
             </div>
           ))}
           <button type="button" className="photo-add" onClick={() => fileInput.current?.click()} disabled={uploading}>

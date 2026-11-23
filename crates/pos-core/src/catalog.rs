@@ -503,6 +503,9 @@ pub struct NewItemField {
 }
 
 pub fn item_save(conn: &Connection, input: &ItemInput) -> Result<i64> {
+    if !input.archive_photo_ids.is_empty() {
+        return user("Photos cannot be removed once saved");
+    }
     let name = clean(&input.name);
     if name.is_empty() {
         return user("Please type the item name");
@@ -597,10 +600,6 @@ pub fn item_save(conn: &Connection, input: &ItemInput) -> Result<i64> {
         )?;
         next_order += 1;
         changes.insert(format!("photo added {}", next_order), json!({ "file": p.file, "original_name": p.original_name }));
-    }
-    for pid in &input.archive_photo_ids {
-        conn.execute("UPDATE photos SET archived_at=?1 WHERE id=?2 AND item_id=?3 AND archived_at IS NULL", params![now, pid, id])?;
-        changes.insert(format!("photo removed {pid}"), json!({ "photo_id": pid }));
     }
     for (i, pid) in input.photo_order.iter().enumerate() {
         conn.execute("UPDATE photos SET sort_order=?1 WHERE id=?2 AND item_id=?3", params![i as i64 + 1, pid, id])?;
