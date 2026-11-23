@@ -1,3 +1,5 @@
+import { DeveloperCard } from "./components/Developer";
+import Icon from "./components/Icon";
 import { useCallback, useEffect, useState } from "react";
 import { call, fileUrl, isTauri, runUpdate } from "./api";
 import { ago, setFormat, Settings } from "./format";
@@ -20,7 +22,9 @@ export function applyLook(s: Partial<Settings>) {
   const root = document.documentElement;
   root.dataset.theme = s.theme === "dark" ? "dark" : "light";
   if (s.accent) root.style.setProperty("--accent", s.accent);
-  root.style.fontSize = `${Math.round(16 * Number(s.font_scale ?? 1))}px`;
+  const w = window.screen?.width || window.innerWidth;
+  const screenScale = w >= 3000 ? 1.25 : w >= 2400 ? 1.15 : w >= 1800 ? 1.05 : 1;
+  root.style.fontSize = `${Math.round(16 * Number(s.font_scale ?? 1) * screenScale)}px`;
   document.title = s.shop_name ? `${s.shop_name} - ShopPOS` : "ShopPOS";
 }
 
@@ -138,15 +142,15 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
   }
 
   const nav = [
-    { to: "/", label: "Home", icon: "⌂" },
-    { to: "/sale", label: "Make sale", icon: "＋", primary: true },
-    { to: "/purchase", label: "Record purchase", icon: "⇩" },
-    { to: "/items", label: "Items & stock", icon: "▦" },
-    { to: "/item/new", label: "Add item", icon: "✚" },
-    { to: "/history", label: "History", icon: "≣" },
-    { to: "/reports", label: "Reports", icon: "▤" },
-    { to: "/categories", label: "Categories & fields", icon: "☰" },
-    { to: "/settings", label: "Settings", icon: "⚙" },
+    { to: "/", label: "Home", icon: "home" },
+    { to: "/sale", label: "Make sale", icon: "sale", primary: true },
+    { to: "/purchase", label: "Record purchase", icon: "purchase" },
+    { to: "/items", label: "Items & stock", icon: "items" },
+    { to: "/item/new", label: "Add item", icon: "add" },
+    { to: "/history", label: "History", icon: "history" },
+    { to: "/reports", label: "Reports", icon: "reports" },
+    { to: "/categories", label: "Categories & fields", icon: "categories" },
+    { to: "/settings", label: "Settings", icon: "settings" },
   ];
   const active = (to: string) => (to === "/" ? route.path === "/" : route.path === to || (to === "/items" && route.path.startsWith("/item/") && !route.path.startsWith("/item/new")));
 
@@ -162,13 +166,14 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
             {nav.map((n) => (
               <a key={n.to} href={`#${n.to}`} className={`nav ${active(n.to) ? "nav-on" : ""} ${n.primary ? "nav-primary" : ""}`}>
                 <span className="nav-icon" aria-hidden>
-                  {n.icon}
+                  <Icon name={n.icon} />
                 </span>
                 {n.label}
               </a>
             ))}
           </nav>
           <BackupBadge />
+          <DeveloperCard compact />
           {!isTauri && <div className="dev-note">Browser test mode</div>}
         </aside>
         <main className="content">

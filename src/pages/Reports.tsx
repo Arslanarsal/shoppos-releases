@@ -219,19 +219,19 @@ function MonthEnd(props: { r: any }) {
         </div>
         <div className="card stat">
           <span>Total profit</span>
-          <strong className="profit" data-testid="me-profit">
+          <strong className={r.total_profit > 0 ? "profit" : ""} data-testid="me-profit">
             {money(r.total_profit)}
           </strong>
         </div>
         <div className="card stat">
           <span>Total loss</span>
-          <strong className="loss" data-testid="me-loss">
+          <strong className={r.total_loss > 0 ? "loss" : ""} data-testid="me-loss">
             {money(r.total_loss)}
           </strong>
         </div>
         <div className="card stat">
           <span>Result</span>
-          <strong className={r.net_result >= 0 ? "profit" : "loss"} data-testid="me-net">
+          <strong className={r.net_result > 0 ? "profit" : r.net_result < 0 ? "loss" : ""} data-testid="me-net">
             {r.net_result < 0 ? `Loss ${money(-r.net_result)}` : money(r.net_result)}
           </strong>
         </div>

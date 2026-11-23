@@ -1,4 +1,5 @@
 import { call } from "../api";
+import Icon from "../components/Icon";
 import { date, kindLabel, money, todayIso } from "../format";
 import { go, useApp, useAsync } from "../ui";
 
@@ -13,16 +14,16 @@ export default function Home() {
       </div>
       <div className="big-actions">
         <button className="big-action primary" onClick={() => go("/sale")} data-testid="home-sale">
-          <span className="ba-icon">＋</span>Make sale
+          <span className="ba-icon"><Icon name="sale" /></span>Make sale
         </button>
         <button className="big-action" onClick={() => go("/purchase")}>
-          <span className="ba-icon">⇩</span>Record purchase
+          <span className="ba-icon"><Icon name="purchase" /></span>Record purchase
         </button>
         <button className="big-action" onClick={() => go("/item/new")}>
-          <span className="ba-icon">✚</span>Add item
+          <span className="ba-icon"><Icon name="add" /></span>Add item
         </button>
         <button className="big-action" onClick={() => go("/items")}>
-          <span className="ba-icon">⌕</span>Find items
+          <span className="ba-icon"><Icon name="search" /></span>Find items
         </button>
       </div>
       {data && (
@@ -30,13 +31,18 @@ export default function Home() {
           <div className="cards">
             <div className="card stat">
               <span>Sales today</span>
-              <strong>{money(data.today.net_sales)}</strong>
-              <small>{data.today.sales_count} sale(s)</small>
+              <strong>{money(data.today.sales_revenue)}</strong>
+              <small>
+                {data.today.sales_count} sale(s){data.today.refunds ? `, refunds ${money(data.today.refunds)}` : ""}
+              </small>
             </div>
             <div className="card stat">
               <span>Sales this month</span>
-              <strong>{money(data.month.net_sales)}</strong>
-              <small>Profit {money(data.month.gross_profit)}</small>
+              <strong>{money(data.month.sales_revenue)}</strong>
+              <small>
+                {data.month.refunds ? `Refunds ${money(data.month.refunds)}, ` : ""}
+                {data.month.gross_profit < 0 ? `loss ${money(-data.month.gross_profit)}` : `profit ${money(data.month.gross_profit)}`}
+              </small>
             </div>
             <div className="card stat">
               <span>Items</span>

@@ -63,8 +63,8 @@ export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toast = useCallback((text: string, kind: Toast["kind"] = "ok") => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-2), { id, text, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 9000 : 4000);
+    setToasts((t) => [...t.slice(-1), { id, text, kind }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 9000 : 3000);
   }, []);
   const view = (
     <div className="toasts" role="status">

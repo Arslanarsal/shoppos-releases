@@ -29,6 +29,12 @@ pub fn open(path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
+pub fn open_reader(path: &Path) -> Result<Connection> {
+    let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)?;
+    conn.busy_timeout(Duration::from_secs(10))?;
+    Ok(conn)
+}
+
 pub fn open_existing(path: &Path) -> Result<Connection> {
     if !path.exists() {
         return Err(Error::NotFound(format!("{} not found", path.display())));
@@ -120,7 +126,7 @@ pub fn snapshot_to(conn: &Connection, dest: &Path) -> Result<()> {
     {
         let mut out = Connection::open(&tmp)?;
         let b = rusqlite::backup::Backup::new(conn, &mut out)?;
-        b.run_to_completion(256, Duration::from_millis(5), None)?;
+        b.run_to_completion(i32::MAX, Duration::from_millis(0), None)?;
     }
     {
         let out = Connection::open(&tmp)?;

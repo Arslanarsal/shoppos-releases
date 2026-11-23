@@ -63,6 +63,13 @@ If the drive is not plugged in, a yellow message tells you. Plug it in and the a
 
 Keep the USB drive somewhere safe. A second drive kept at home is even better: plug it in once a week and press Back up now.
 
+## Viruses and safety
+
+- The app keeps a checked copy of your shop every hour on this computer, even when a USB drive is chosen.
+- On computers set up by your developer, Windows also copies every backup into a locked folder, `C:\ProgramData\ShopPOS Vault`. Normal programs, and viruses that run as you, cannot change or delete it. To use it: **Settings, Backups, Restore from a backup**, and choose that folder.
+- The USB drive is still the best protection. Unplug it after the backup and keep it safe; a virus cannot reach a drive that is not plugged in.
+- Do not plug in unknown USB sticks and do not install cracked programs on the shop computer.
+
 ## Copy your data somewhere else
 
 Your shop data stays on this computer and is never moved by itself. To keep a copy elsewhere or move to another computer: **Settings, Backups, Export a full copy**, pick a drive or folder. On the other computer, install ShopPOS and choose **Restore from backup**.
@@ -82,3 +89,7 @@ You do not need to do anything. When your developer sends an update, close the a
 ## Your shop look
 
 **Settings**: shop name, logo, address, phone, money sign, date style, receipt text, colours and text size. In **Categories & fields**, press **Change** on a field to show it in lists or print it on receipts.
+
+## Help
+
+Your developer: **M. Arslan**, phone / WhatsApp **+923423407767**, email **arslanarsal455@gmail.com**. The same details are at the bottom left of the app and in **Settings, About**.

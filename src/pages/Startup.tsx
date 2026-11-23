@@ -1,3 +1,4 @@
+import { DeveloperCard } from "../components/Developer";
 import { useEffect, useState } from "react";
 import { call, isTauri } from "../api";
 import RestoreWizard from "../components/RestoreWizard";
@@ -158,6 +159,7 @@ export function Problem(props: { state: any; onRetry: () => void }) {
             )}
           </div>
         )}
+        <DeveloperCard />
         {restore && <RestoreWizard onDone={props.onRetry} warnReplace />}
       </div>
     </div>

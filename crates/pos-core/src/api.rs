@@ -19,6 +19,7 @@ pub struct Core {
     migrations: Vec<Migration>,
     conn: Mutex<Option<Connection>>,
     state: Mutex<Value>,
+    bk: Mutex<()>,
 }
 
 const MAX_UPLOAD: usize = 40 * 1024 * 1024;
@@ -59,6 +60,8 @@ impl Core {
             migrations,
             conn: Mutex::new(None),
             state: Mutex::new(json!({ "state": "closed" })),
+            bk: Mutex::new(()),
+
         }
     }
 
@@ -179,6 +182,11 @@ impl Core {
         Ok(self.open())
     }
 
+    fn reader(&self) -> Result<Connection> {
+        self.with_conn(|_| Ok(()))?;
+        db::open_reader(&self.db_path())
+    }
+
     fn with_conn<T>(&self, f: impl FnOnce(&mut Connection) -> Result<T>) -> Result<T> {
         let mut g = self.conn.lock().unwrap();
         match g.as_mut() {
@@ -227,7 +235,18 @@ impl Core {
         if !chosen {
             std::fs::create_dir_all(&dest)?;
         }
-        self.with_conn(|c| backup::run(c, &self.data_dir, &dest, &self.app_version, deep))
+        let _g = self.bk.lock().unwrap_or_else(|e| e.into_inner());
+        let r = self.reader()?;
+        r.execute_batch("BEGIN")?;
+        let res = backup::run(&r, &self.data_dir, &dest, &self.app_version, deep);
+        if chosen {
+            let local = self.data_dir.join("local-backups");
+            if std::fs::create_dir_all(&local).is_ok() {
+                let _ = backup::export_quick(&r, &self.data_dir, &local, &self.app_version);
+            }
+        }
+        let _ = r.execute_batch("COMMIT");
+        res
     }
 
     pub fn backup_status(&self) -> Result<Value> {
@@ -259,6 +278,7 @@ impl Core {
     }
 
     fn restore_from(&self, snap: &Path) -> Result<Value> {
+        let _g = self.bk.lock().unwrap_or_else(|e| e.into_inner());
         self.close();
         let r = backup::restore(snap, &self.data_dir)?;
         let st = self.open();
@@ -282,6 +302,7 @@ impl Core {
     }
 
     fn recovery_restore(&self, path: &Path) -> Result<Value> {
+        let _g = self.bk.lock().unwrap_or_else(|e| e.into_inner());
         let safe = self.data_dir.join("backups").join("before-update");
         let canon = path.canonicalize()?;
         if !canon.starts_with(safe.canonicalize()?) {
@@ -346,7 +367,12 @@ impl Core {
                 if s(a, "path").trim().is_empty() || !dest.is_dir() {
                     return user("Choose a drive or folder that exists for the copy");
                 }
-                return self.with_conn(|c| backup::export_copy(c, &self.data_dir, &dest, &self.app_version));
+                let _g = self.bk.lock().unwrap_or_else(|e| e.into_inner());
+                let r = self.reader()?;
+                r.execute_batch("BEGIN")?;
+                let res = backup::export_copy(&r, &self.data_dir, &dest, &self.app_version);
+                let _ = r.execute_batch("COMMIT");
+                return res;
             }
             "export_csv" => {
                 let text = self.with_conn(|c| export(c, a))?;

@@ -108,6 +108,10 @@ pub fn run(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &s
     res
 }
 
+pub fn export_quick(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &str) -> Result<Value> {
+    run_inner(conn, data_dir, dest_root, app_version, false)
+}
+
 pub fn export_copy(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &str) -> Result<Value> {
     run_inner(conn, data_dir, dest_root, app_version, true)
 }

@@ -98,6 +98,14 @@ Output: `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
 
 The app uses Microsoft WebView2, which Windows 10 (version 1803 and newer) gets through Windows Update. If a computer does not have it, the installer installs it (an internet connection is needed for that first install only). After that the app works offline.
 
+## Testing on the shop computer
+
+`TARGET=windows node e2e/run.mjs` runs the full user test (48 checks) against the real installed app on the shop PC over SSH (`PC` and `PC_KEY` choose the computer and key). It uses its own data folder under `C:\Users\Public\pc\test`, never the shop's data.
+
+## Protecting backups from viruses (one time, as administrator)
+
+Run `scripts/windows/protect-data.ps1` once in an administrator PowerShell on the shop PC. It creates `C:\ProgramData\ShopPOS Vault` (only Windows and administrators can write to it) and a Windows task that copies every ShopPOS backup there every 30 minutes, keeping the newest 90 per shop. Restore from it with the normal Restore from backup screen.
+
 ## Testing updates by hand on Windows
 
 Environment variables read by the app (for testing only):

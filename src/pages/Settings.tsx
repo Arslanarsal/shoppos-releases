@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { applyLook } from "../App";
 import { call, fileUrl, isTauri, pickFolder, uploadImage } from "../api";
 import { Receipt } from "../components/Pickers";
+import { DeveloperCard } from "../components/Developer";
 import RestoreWizard from "../components/RestoreWizard";
 import { ago, dateTime, Settings, todayIso } from "../format";
 import { ErrorBox, Label, Modal, Tabs, go, useApp } from "../ui";
@@ -316,6 +317,7 @@ export default function SettingsPage(props: { tab: string }) {
           <p>The app checks for a new version every time it opens. To update: close the app and open it again.</p>
           <p className="muted small">Shop data folder: {appInfo?.data_dir}</p>
           <IntegrityCheck />
+          <DeveloperCard />
         </div>
       )}
       {restore && (

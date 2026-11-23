@@ -1,5 +1,5 @@
 import { chromium } from "playwright-core";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,7 +9,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "e2e", ".out");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "shoppos-e2e-"));
+const REMOTE = process.env.TARGET === "windows";
+const PC = process.env.PC ?? "pak lab@192.168.100.215";
+const KEY = process.env.PC_KEY ?? path.join(os.homedir(), ".ssh", "pos_client_pc");
+const P = REMOTE ? path.win32 : path;
+const work = REMOTE ? `C:\\Users\\Public\\pc\\test\\run-${Date.now()}` : fs.mkdtempSync(path.join(os.tmpdir(), "shoppos-e2e-"));
+let rpage = null;
 const exe = path.join(root, "target", "release", process.platform === "win32" ? "pos-dev.exe" : "pos-dev");
 const chrome =
   process.env.CHROME ??
@@ -22,6 +27,35 @@ function check(cond, msg) {
   results.push(`ok   ${step}: ${msg}`);
 }
 
+function ps(cmd) {
+  return execFileSync("ssh", ["-i", KEY, "-o", "BatchMode=yes", PC, `powershell -NoProfile -Command "${cmd.replace(/"/g, '\\"')}"`], { encoding: "utf8" }).trim();
+}
+
+const disk = {
+  mkdir: (p) => (REMOTE ? ps(`New-Item -ItemType Directory -Force '${p}' | Out-Null`) : fs.mkdirSync(p, { recursive: true })),
+  exists: (p) => (REMOTE ? ps(`Test-Path -LiteralPath '${p}'`) === "True" : fs.existsSync(p)),
+};
+
+async function openShop(browser, dataDir, port) {
+  if (!REMOTE) {
+    const proc = await server(dataDir, port);
+    const page = await browser.newPage({ viewport: { width: 1366, height: 860 } });
+    page.on("pageerror", (e) => results.push(`PAGE ERROR ${e.message}`));
+    return { page, base: `http://127.0.0.1:${port}/`, close: () => proc.kill() };
+  }
+  const t0 = Date.now();
+  execFileSync(path.join(root, "e2e", "pc-launch.sh"), [dataDir], { stdio: "inherit" });
+  const cdp = await chromium.connectOverCDP("http://127.0.0.1:9222");
+  const page = cdp.contexts()[0].pages().find((p) => p.url().includes("tauri.localhost")) ?? cdp.contexts()[0].pages()[0];
+  page.on("pageerror", (e) => results.push(`PAGE ERROR ${e.message}`));
+  page.setDefaultTimeout(90000);
+  await page.setViewportSize({ width: 1366, height: 860 }).catch(() => {});
+  await page.waitForFunction(() => document.querySelector(".boot-card, .shell"), null, { timeout: 60000 });
+  results.push(`info real Windows app opened in ${((Date.now() - t0) / 1000).toFixed(1)} s (data ${dataDir})`);
+  rpage = page;
+  return { page, base: "http://tauri.localhost/", close: () => cdp.close().catch(() => {}) };
+}
+
 function server(dataDir, port) {
   const p = spawn(exe, [], { env: { ...process.env, SHOPPOS_DATA_DIR: dataDir, PORT: String(port), DIST: path.join(root, "dist") }, stdio: ["ignore", "pipe", "inherit"] });
   return new Promise((resolve, reject) => {
@@ -32,6 +66,7 @@ function server(dataDir, port) {
 }
 
 async function api(port, cmd, args = {}) {
+  if (REMOTE) return rpage.evaluate(([c, a]) => window.__TAURI_INTERNALS__.invoke("call", { cmd: c, args: a }), [cmd, args]);
   const r = await fetch(`http://127.0.0.1:${port}/api/${cmd}`, { method: "POST", body: JSON.stringify(args) });
   return r.json();
 }
@@ -41,7 +76,7 @@ const PNG = Buffer.from(
   "hex",
 );
 
-async function makeJpeg(page, file, color, label) {
+async function makeJpeg(page, name, color, label) {
   const b64 = await page.evaluate(
     ([c, l]) => {
       const cv = document.createElement("canvas");
@@ -57,7 +92,7 @@ async function makeJpeg(page, file, color, label) {
     },
     [color, label],
   );
-  fs.writeFileSync(file, Buffer.from(b64, "base64"));
+  return { name, mimeType: "image/jpeg", buffer: Buffer.from(b64, "base64") };
 }
 
 async function shot(page, name) {
@@ -82,19 +117,17 @@ async function pick(page, text) {
 }
 
 async function main() {
-  const dataA = path.join(work, "pc1");
-  const dataB = path.join(work, "pc2");
-  const usb = path.join(work, "usb-drive");
-  const downloads = path.join(work, "Downloads");
-  fs.mkdirSync(usb);
-  fs.mkdirSync(downloads);
+  const dataA = P.join(work, "pc1");
+  const dataB = P.join(work, "pc2");
+  const usb = P.join(work, "usb-drive");
+  disk.mkdir(usb);
   const portA = 5191;
   const portB = 5192;
-  const srvA = await server(dataA, portA);
-  const browser = await chromium.launch({ executablePath: chrome, headless: true });
-  const page = await browser.newPage({ viewport: { width: 1366, height: 860 } });
-  page.on("pageerror", (e) => results.push(`PAGE ERROR ${e.message}`));
-  const base = `http://127.0.0.1:${portA}/`;
+  const browser = REMOTE ? null : await chromium.launch({ executablePath: chrome, headless: true });
+  const shopA = await openShop(browser, dataA, portA);
+  let page = shopA.page;
+  const base = shopA.base;
+  const srvA = { kill: shopA.close };
   try {
     step = "A shop";
     await page.goto(base);
@@ -103,8 +136,7 @@ async function main() {
     await page.click('[data-testid="create-shop"]');
     await page.locator(".brand", { hasText: "Arslan Furniture and Bikes" }).waitFor();
     check(true, "shop created with its own name");
-    const logoFile = path.join(downloads, "logo.png");
-    fs.writeFileSync(logoFile, PNG);
+    const logoFile = { name: "logo.png", mimeType: "image/png", buffer: PNG };
     await page.goto(base + "#/settings?tab=shop");
     await page.setInputFiles('[data-testid="logo-input"]', logoFile);
     await page.locator('[data-testid="logo-preview"]').waitFor();
@@ -122,8 +154,7 @@ async function main() {
     check(true, "Furniture and Scooter categories created in the interface");
 
     step = "A desk";
-    const deskPhoto = path.join(downloads, "desk.jpg");
-    await makeJpeg(page, deskPhoto, "#8b5a2b", "DESK");
+    const deskPhoto = await makeJpeg(page, "desk.jpg", "#8b5a2b", "DESK");
     await page.goto(base + "#/item/new");
     await page.setInputFiles('[data-testid="photo-input"]', deskPhoto);
     await page.locator(".photo-tile img").waitFor();
@@ -152,12 +183,10 @@ async function main() {
     check((await page.textContent('dd[data-field-value="Drawer count"]')) === "4", "drawer count saved as 4");
     check((await page.textContent('dd[data-field-value="Scratch note"]'))?.includes("scratch"), "item only field saved");
     const deskUrl = page.url();
-    fs.renameSync(deskPhoto, path.join(work, "moved-away.jpg"));
-    fs.rmSync(path.join(work, "moved-away.jpg"));
     await page.goto(base + "#/");
     await page.goto(deskUrl);
     await page.reload();
-    check(await photoLoaded(page, '[data-testid="item-photo"]'), "photo still opens after the original file was moved and deleted");
+    check(await photoLoaded(page, '[data-testid="item-photo"]'), "photo opens from the app's own copy after reopening");
     await shot(page, "A-desk");
 
     await page.goto(base + "#/item/new");
@@ -333,17 +362,22 @@ async function main() {
     const all = await page.textContent('[data-testid="items-table"]');
     check(all.includes("Damaged") && all.includes("Sold") && all.includes("In stock"), "items page shows everything with status in one place");
     await shot(page, "F-all-items");
-    const exportDir = path.join(work, "export-drive");
-    fs.mkdirSync(exportDir);
+    const exportDir = P.join(work, "export-drive");
+    disk.mkdir(exportDir);
     await page.goto(base + "#/settings?tab=backup");
-    await page.fill('[data-testid="export-path"]', exportDir);
-    await page.click('[data-testid="export-full"]');
-    await page.locator(".toast", { hasText: "Full copy saved" }).waitFor();
-    check(fs.existsSync(path.join(dataA, "shop.db")), "export copied the data, original stays on this computer");
+    if (REMOTE) {
+      const ex = await api(portA, "export_full", { path: exportDir });
+      check(ex.ok, "full copy exported (the real app picks the folder with the Windows folder window)");
+    } else {
+      await page.fill('[data-testid="export-path"]', exportDir);
+      await page.click('[data-testid="export-full"]');
+      await page.locator(".toast", { hasText: "Full copy saved" }).waitFor();
+    }
+    check(disk.exists(P.join(dataA, "shop.db")) && disk.exists(P.join(exportDir)), "export copied the data, original stays on this computer");
 
     step = "D backup";
     await page.goto(base + "#/settings?tab=backup");
-    await page.fill('[data-testid="backup-dest"]', path.join(work, "unplugged-drive"));
+    await page.fill('[data-testid="backup-dest"]', P.join(work, "unplugged-drive"));
     await page.click('[data-testid="backup-dest-save"]');
     await page.click('[data-testid="backup-now"]');
     await page.locator(".alert-error", { hasText: "plug it in" }).waitFor();
@@ -358,8 +392,10 @@ async function main() {
     srvA.kill();
 
     step = "D restore";
-    const srvB = await server(dataB, portB);
-    const baseB = `http://127.0.0.1:${portB}/`;
+    const shopB = await openShop(browser, dataB, portB);
+    page = shopB.page;
+    const baseB = shopB.base;
+    const srvB = { kill: shopB.close };
     await page.goto(baseB);
     await page.click('[data-testid="start-restore"]');
     await page.fill('[data-testid="restore-path"]', usb);
@@ -386,7 +422,7 @@ async function main() {
     await shot(page, "failure").catch(() => {});
     process.exitCode = 1;
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
     srvA.kill();
   }
   console.log(results.join("\n"));

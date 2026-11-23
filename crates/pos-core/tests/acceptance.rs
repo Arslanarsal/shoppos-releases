@@ -494,3 +494,33 @@ fn month_end_profit_loss_status_and_export() {
     assert_eq!(found.as_array().unwrap().len(), 1);
     assert!(t.path().join("data").join("shop.db").exists(), "export copies, never moves");
 }
+
+#[test]
+fn backup_runs_beside_sales_and_keeps_a_local_copy() {
+    let dir = tempfile::tempdir().unwrap();
+    let usb = dir.path().join("usb");
+    std::fs::create_dir_all(&usb).unwrap();
+    let core = std::sync::Arc::new(new_shop(&dir.path().join("shop")));
+    let (_, desk) = setup_desks(&core);
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 500, "unit_price": 100 }] }));
+    ok(&core, "settings_set", json!({ "backup_dest": usb.display().to_string() }));
+    let bg = {
+        let c = core.clone();
+        std::thread::spawn(move || {
+            for _ in 0..5 {
+                let r = c.call("backup_now", json!({ "deep": true }));
+                assert_eq!(r["ok"], true, "backup failed while selling: {}", r["error"]);
+            }
+        })
+    };
+    for _ in 0..40 {
+        ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "lines": [{ "item_id": desk, "qty": 1, "unit_price": 200 }] }));
+    }
+    bg.join().unwrap();
+    ok(&core, "backup_now", json!({ "deep": false }));
+    let local = dir.path().join("shop").join("local-backups");
+    let found = ok(&core, "restore_find", json!({ "path": local.display().to_string() }));
+    assert!(found.as_array().map(|a| !a.is_empty()).unwrap_or(false), "a local copy is kept even when a USB drive is chosen");
+    let on_usb = ok(&core, "restore_find", json!({ "path": usb.display().to_string() }));
+    assert!(on_usb.as_array().map(|a| !a.is_empty()).unwrap_or(false));
+}
