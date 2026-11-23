@@ -367,7 +367,7 @@ function ContactsEditor(props: { rows: { name: string; title: string; phone: str
       <span className="lbl-text">Contact numbers (printed on every receipt)</span>
       {rows.map((r, i) => (
         <div key={i} className="detail-row">
-          <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name, like Arslan Owner" data-testid={`contact-name-${i}`} />
+          <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name" data-testid={`contact-name-${i}`} />
           <input className="grow" value={r.phone} onChange={(e) => set(i, { phone: e.target.value })} placeholder="Phone number" inputMode="tel" data-testid={`contact-phone-${i}`} />
           <button type="button" className="btn btn-ghost" aria-label="Take off this number" onClick={() => props.onChange(rows.filter((_, j) => j !== i))}>
             ✕
