@@ -608,9 +608,7 @@ pub fn adjust_post(conn: &mut Connection, d: &AdjustInput) -> Result<Value> {
         return dup(conn, id);
     }
     let date = check_date(&d.business_date)?;
-    if d.reason.trim().is_empty() {
-        return user("Please write the reason for the stock change");
-    }
+    let reason = if d.reason.trim().is_empty() { "Stock correction".to_string() } else { d.reason.trim().to_string() };
     if d.delta == 0 {
         return user("The quantity did not change");
     }
@@ -629,7 +627,7 @@ pub fn adjust_post(conn: &mut Connection, d: &AdjustInput) -> Result<Value> {
         };
         let cost = qty * unit_cost;
         let (txn_id, _) = insert_txn(&tx, NewTxn {
-            kind: "adjustment", date: &date, party: "", notes: "Stock added", reason: &d.reason, related: None,
+            kind: "adjustment", date: &date, party: "", notes: "Stock added", reason: &reason, related: None,
             subtotal: cost, discount: 0, total: cost, token: &d.client_token,
         })?;
         let line_id = insert_line(&tx, txn_id, 1, d.item_id, qty, 1, unit_cost, 0, 0, cost, cost, None, &desc, &details)?;
@@ -642,7 +640,7 @@ pub fn adjust_post(conn: &mut Connection, d: &AdjustInput) -> Result<Value> {
         return user(format!("Only {avail} of \"{}\" in stock on {date}", c.name));
     }
     let (txn_id, _) = insert_txn(&tx, NewTxn {
-        kind: "adjustment", date: &date, party: "", notes: "Stock removed", reason: &d.reason, related: None,
+        kind: "adjustment", date: &date, party: "", notes: "Stock removed", reason: &reason, related: None,
         subtotal: 0, discount: 0, total: 0, token: &d.client_token,
     })?;
     let (plan, cost) = plan_fifo(&tx, d.item_id, qty, &date)?;

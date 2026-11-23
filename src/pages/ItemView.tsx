@@ -266,11 +266,15 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
+const REASONS = ["Counted again", "Damaged", "Lost", "Stolen", "Found", "Given free", "Used in the shop", "Entered wrong before"];
+
 function AdjustStock(props: { item: any; stock: number; damaged?: boolean; onClose: () => void; onDone: () => void }) {
   const { toast } = useApp();
   const [counted, setCounted] = useState(String(props.damaged ? Math.max(props.stock - 1, 0) : props.stock));
   const [cost, setCost] = useState("");
-  const [reason, setReason] = useState(props.damaged ? "Damaged" : "");
+  const [pick, setPick] = useState(props.damaged ? "Damaged" : "");
+  const [other, setOther] = useState("");
+  const reason = pick === "other" ? other.trim() : pick;
   const [day, setDay] = useState(todayIso());
   const [error, setError] = useState("");
   const [token] = useState(newToken());
@@ -328,10 +332,25 @@ function AdjustStock(props: { item: any; stock: number; damaged?: boolean; onClo
             <input value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" />
           </Label>
         )}
-        <Label text="Reason" required>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Like: one chair broken in storage" />
-        </Label>
-        {delta !== 0 && <div className="alert alert-info">This will {delta > 0 ? `add ${delta}` : `remove ${-delta}`} and keep a record with your reason.</div>}
+        <div className="row">
+          <Label text="Reason (optional)">
+            <select value={pick} onChange={(e) => setPick(e.target.value)} data-testid="adjust-reason">
+              <option value="">No reason</option>
+              {REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+              <option value="other">Other (type it)</option>
+            </select>
+          </Label>
+          {pick === "other" && (
+            <Label text="Your reason">
+              <input value={other} onChange={(e) => setOther(e.target.value)} placeholder="Like: one chair broken in storage" autoFocus />
+            </Label>
+          )}
+        </div>
+        {delta !== 0 && <div className="alert alert-info">This will {delta > 0 ? `add ${delta}` : `remove ${-delta}`} and keep a record of the change.</div>}
         <ErrorBox text={error} />
       </div>
     </Modal>

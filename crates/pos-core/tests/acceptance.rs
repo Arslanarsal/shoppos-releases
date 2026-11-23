@@ -545,3 +545,16 @@ fn sale_photos_are_kept_and_cannot_be_removed() {
     let n: i64 = db.query_row("SELECT COUNT(*) FROM txn_lines WHERE txn_id=?1", [s["id"].as_i64().unwrap() + 1], |r| r.get(0)).unwrap();
     assert_eq!(n, 0, "a refused sale leaves nothing behind");
 }
+
+#[test]
+fn correct_stock_reason_is_optional() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let (_, desk) = setup_desks(&core);
+    let a = ok(&core, "adjust_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "item_id": desk, "delta": 3, "unit_cost": 100, "reason": "" }));
+    assert_eq!(a["reason"], "Stock correction");
+    let b = ok(&core, "adjust_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "item_id": desk, "delta": -1, "reason": "Lost" }));
+    assert_eq!(b["reason"], "Lost");
+    let s = ok(&core, "item_search", json!({ "text": "Desk" }));
+    assert_eq!(s["rows"][0]["stock"], 2);
+}
