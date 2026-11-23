@@ -11,6 +11,7 @@ export type Settings = {
   receipt_header: string;
   receipt_footer: string;
   receipt_show_logo: boolean;
+  receipt_watermark: boolean;
   theme: "light" | "dark";
   accent: string;
   font_scale: number;

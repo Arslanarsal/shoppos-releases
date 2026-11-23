@@ -17,6 +17,7 @@ pub fn defaults() -> Value {
         "receipt_header": "",
         "receipt_footer": "Thank you for shopping with us",
         "receipt_show_logo": true,
+        "receipt_watermark": true,
         "theme": "light",
         "accent": "#1d4ed8",
         "font_scale": 1.0,
@@ -28,7 +29,7 @@ pub fn defaults() -> Value {
 
 const ALLOWED: &[&str] = &[
     "shop_name", "shop_logo", "shop_address", "shop_phone", "shop_email", "currency_symbol", "currency_code",
-    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "theme", "accent",
+    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "receipt_watermark", "theme", "accent",
     "font_scale", "backup_dest", "backup_interval_minutes",
 ];
 
@@ -78,7 +79,7 @@ fn sanitize(k: &str, v: Value) -> Value {
         "money_decimals" => json!(if v.as_i64() == Some(2) || v.as_str() == Some("2") { 2 } else { 0 }),
         "font_scale" => json!(v.as_f64().unwrap_or(1.0).clamp(0.9, 1.5)),
         "backup_interval_minutes" => json!(v.as_i64().unwrap_or(60).clamp(5, 24 * 60)),
-        "receipt_show_logo" => json!(v.as_bool().unwrap_or(true)),
+        "receipt_show_logo" | "receipt_watermark" => json!(v.as_bool().unwrap_or(true)),
         "theme" => json!(if v.as_str() == Some("dark") { "dark" } else { "light" }),
         _ => match v {
             Value::String(s) => Value::String(s.chars().take(2000).collect()),
@@ -95,6 +96,6 @@ pub fn receipt_snapshot(conn: &Connection) -> Result<Value> {
         "shop_name": pick("shop_name"), "shop_logo": pick("shop_logo"), "shop_address": pick("shop_address"),
         "shop_phone": pick("shop_phone"), "shop_email": pick("shop_email"), "currency_symbol": pick("currency_symbol"),
         "money_decimals": pick("money_decimals"), "date_format": pick("date_format"), "receipt_header": pick("receipt_header"),
-        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "accent": pick("accent")
+        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "receipt_watermark": pick("receipt_watermark"), "accent": pick("accent")
     }))
 }

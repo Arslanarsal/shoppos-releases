@@ -967,6 +967,8 @@ button.stat:hover {
   justify-content: center;
 }
 .receipt {
+  position: relative;
+  overflow: hidden;
   background: #fff;
   color: #111;
   width: 360px;
@@ -1476,4 +1478,18 @@ details summary {
   border-radius: 10px;
   text-align: center;
   user-select: all;
+}
+
+.r-watermark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78%;
+  transform: translate(-50%, -45%);
+  color: #000;
+  opacity: 0.06;
+  pointer-events: none;
+}
+.receipt > *:not(.r-watermark) {
+  position: relative;
 }

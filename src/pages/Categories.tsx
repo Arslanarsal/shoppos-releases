@@ -64,9 +64,23 @@ export default function CategoriesPage(props: { selected: string | null }) {
     <div className="page">
       <div className="page-head">
         <h1>Categories & fields</h1>
-        <button className="btn btn-primary" onClick={() => setNewCat(true)} data-testid="new-category">
-          + New category
-        </button>
+        <div className="row">
+          <button
+            className="btn"
+            onClick={async () => {
+              const r = await call("tractor_setup");
+              toast(r.fields_added ? `Tractors category ready with ${r.fields_added} fields` : "Tractors category is already set up");
+              cats.reload();
+              go("/categories", { id: r.category_id });
+            }}
+            data-testid="tractor-setup"
+          >
+            + Tractors (ready made)
+          </button>
+          <button className="btn btn-primary" onClick={() => setNewCat(true)} data-testid="new-category">
+            + New category
+          </button>
+        </div>
       </div>
       <ErrorBox text={error} />
       <div className="split">

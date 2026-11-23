@@ -123,7 +123,7 @@ async function main() {
   disk.mkdir(usb);
   if (REMOTE) {
     const act = fs.readFileSync(path.join(os.homedir(), ".shoppos-license", "shop-pc.txt"), "utf8").trim().split("\n")[1].trim();
-    ps(`New-Item -ItemType Directory -Force '${P.join(work, "ShopPOS License")}' | Out-Null; Set-Content -NoNewline '${P.join(work, "ShopPOS License", "license.txt")}' '${act}'`);
+    ps(`New-Item -ItemType Directory -Force '${P.join(work, "ShopPOS License")}' | Out-Null; [IO.File]::WriteAllText('${P.join(work, "ShopPOS License", "license.txt")}', '${act}')`);
   }
   const portA = 5191;
   const portB = 5192;
@@ -507,6 +507,43 @@ async function main() {
     await page.locator('[data-testid="item-buy-price"]').waitFor();
     await page.waitForFunction(() => document.querySelector('[data-testid="item-buy-price"]').value === "90000");
     check((await page.textContent('[data-testid="stock-preview"]')).includes("Profit Rs 30,000"), "edit screen shows what it was bought for and the profit");
+
+    step = "H tractors";
+    await page.goto(base + "#/categories");
+    await page.click('[data-testid="tractor-setup"]');
+    await page.locator(".toast", { hasText: "Tractors category ready with 10 fields" }).waitFor();
+    await page.goto(base + "#/item/new");
+    await page.fill('[data-testid="item-name"]', "Massey 240 red");
+    await page.selectOption('[data-testid="item-category"]', { label: "Tractors" });
+    await page.check('[data-testid="tracking-unique"]');
+    await page.fill('[data-testid="item-identifier"]', "MF240-778");
+    await page.selectOption('[data-field="Brand"]', "Massey Ferguson (Millat)");
+    await page.selectOption('[data-field="Model"]', "__new__");
+    await page.fill('[data-testid="choice-new-Model"]', "MF 240 Super");
+    await page.click('[data-testid="choice-add-Model"]');
+    await page.locator('[data-field="Model"]').waitFor();
+    check((await page.inputValue('[data-field="Model"]')) === "MF 240 Super", "tractor model picked from a dropdown, new model added on the spot");
+    await page.fill('[data-field="Engine number"]', "ENG-55120");
+    await page.fill('[data-testid="item-buy-price"]', "2900000");
+    await page.fill('[data-testid="item-price"]', "3150000");
+    await page.click('[data-testid="item-save"]');
+    await page.locator('dd[data-field-value="Model"]', { hasText: "MF 240 Super" }).waitFor();
+    const mfields = await api(portA, "field_list", { category_id: (await api(portA, "category_list", {})).data.find((c) => c.name === "Tractors").id });
+    check(mfields.data.find((f) => f.name === "Model").options.includes("MF 240 Super"), "new model stays in the list for next time");
+    await shot(page, "H-tractor");
+    await page.goto(base + "#/sale");
+    await page.fill('[data-testid="trade-party"]', "Haji Aslam");
+    await pick(page, "MF240-778");
+    await page.click('[data-testid="sale-detail-box"] .chip-btn:has-text("+ Father\'s name")');
+    await page.fill('[data-testid="sale-detail-value-0"]', "Muhammad Akram");
+    await page.click('[data-testid="trade-review"]');
+    await page.click('[data-testid="trade-confirm"]');
+    await page.locator('[data-testid="receipt"]').waitFor();
+    const trec = await page.textContent('[data-testid="receipt"]');
+    check(trec.includes("Model: MF 240 Super") && trec.includes("Engine number: ENG-55120") && trec.includes("Father's name: Muhammad Akram") && !trec.includes("29,00,000") && !trec.includes("2,900,000"), "tractor receipt has model, engine number and buyer details, no buy price");
+    check((await page.locator('[data-testid="receipt"] [data-testid="r-watermark"]').count()) === 1, "tractor watermark on the receipt");
+    await shot(page, "H-tractor-receipt");
+    await page.click('[data-testid="trade-new"]');
 
     const exportDir = P.join(work, "export-drive");
     disk.mkdir(exportDir);

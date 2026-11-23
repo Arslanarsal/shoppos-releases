@@ -3,7 +3,7 @@ import { call } from "../api";
 
 export type Detail = { name: string; value: string; print: boolean };
 
-const COMMON = ["Phone", "CNIC", "Address", "Payment method", "Warranty", "Delivery date", "Registration no."];
+const COMMON = ["Phone", "CNIC", "Father's name", "Address", "Engine no.", "Registration no.", "Payment method", "Advance paid", "Balance due", "Delivery date", "Warranty"];
 
 export function DetailRows(props: { rows: Detail[]; onChange: (rows: Detail[]) => void; testid?: string }) {
   const [names, setNames] = useState<string[]>(COMMON);
@@ -14,7 +14,7 @@ export function DetailRows(props: { rows: Detail[]; onChange: (rows: Detail[]) =
   }, []);
   const set = (i: number, p: Partial<Detail>) => props.onChange(props.rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   const add = (name = "") => props.onChange([...props.rows, { name, value: "", print: true }]);
-  const unused = names.filter((n) => !props.rows.some((r) => r.name.toLowerCase() === n.toLowerCase())).slice(0, 8);
+  const unused = names.filter((n) => !props.rows.some((r) => r.name.toLowerCase() === n.toLowerCase())).slice(0, 12);
   const id = props.testid ?? "detail";
   return (
     <div className="details-box" data-testid={`${id}-box`}>

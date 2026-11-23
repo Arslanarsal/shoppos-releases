@@ -93,6 +93,7 @@ export function Receipt(props: { txn: any }) {
   const title = t.kind === "sale" ? "RECEIPT" : t.kind === "purchase" ? "PURCHASE RECORD" : t.kind === "return" ? "RETURN / REFUND" : t.kind === "reversal" ? "REVERSAL" : "STOCK CHANGE";
   return (
     <div className="receipt print-area" data-testid="receipt">
+      {s.receipt_watermark !== false && <TractorMark />}
       <div className="r-head">
         {s.receipt_show_logo !== false && s.shop_logo && <img className="r-logo" src={fileUrl(s.shop_logo)} alt="" />}
         <div className="r-shop">{s.shop_name}</div>
@@ -161,5 +162,21 @@ export function Receipt(props: { txn: any }) {
       {t.notes && t.kind !== "return" && t.kind !== "reversal" && <div className="r-note">{t.notes}</div>}
       {s.receipt_footer && <div className="r-foot">{s.receipt_footer}</div>}
     </div>
+  );
+}
+
+function TractorMark() {
+  return (
+    <svg className="r-watermark" viewBox="0 0 200 140" aria-hidden data-testid="r-watermark">
+      <g fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" strokeLinecap="round">
+        <circle cx="52" cy="98" r="32" />
+        <circle cx="52" cy="98" r="10" />
+        <circle cx="160" cy="110" r="20" />
+        <circle cx="160" cy="110" r="6" />
+        <path d="M84 98h56M30 62V38h44l12 32h62l10 20v12" />
+        <path d="M74 38V20h-8M130 70V44h12v26" />
+        <path d="M40 62h48" />
+      </g>
+    </svg>
   );
 }

@@ -57,19 +57,61 @@ export function FieldInput(props: { def: FieldDef; value: any; onChange: (v: any
         </select>
       );
     case "choice":
-      return (
-        <select {...common} value={value ?? ""} onChange={(e) => onChange(e.target.value || null)}>
-          <option value="">-</option>
-          {def.options.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-      );
+      return <ChoiceInput def={def} value={value} onChange={onChange} common={common} />;
     default:
       return <input {...common} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+function ChoiceInput(props: { def: FieldDef; value: any; onChange: (v: any) => void; common: any }) {
+  const { def, value, onChange } = props;
+  const [extra, setExtra] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const options = [...def.options, ...extra.filter((x) => !def.options.includes(x))];
+  const add = async () => {
+    const t = text.trim();
+    if (!t) return;
+    setErr("");
+    const same = options.find((o) => o.toLowerCase() === t.toLowerCase());
+    if (!same) {
+      try {
+        await call("field_update", { id: def.id, patch: { options: [...options, t] } });
+        setExtra((x) => [...x, t]);
+      } catch (e: any) {
+        return setErr(e.message);
+      }
+    }
+    onChange(same ?? t);
+    setAdding(false);
+    setText("");
+  };
+  if (adding) {
+    return (
+      <div className="row nowrap">
+        <input className="grow" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())} placeholder={`New ${def.name.toLowerCase()}`} autoFocus data-testid={`choice-new-${def.name}`} />
+        <button type="button" className="btn btn-small btn-primary" onClick={add} data-testid={`choice-add-${def.name}`}>
+          Add
+        </button>
+        <button type="button" className="btn btn-small" onClick={() => setAdding(false)}>
+          Cancel
+        </button>
+        {err && <span className="field-error">{err}</span>}
+      </div>
+    );
+  }
+  return (
+    <select {...props.common} value={value ?? ""} onChange={(e) => (e.target.value === "__new__" ? setAdding(true) : onChange(e.target.value || null))}>
+      <option value="">-</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+      {def.id > 0 && <option value="__new__">+ Add new...</option>}
+    </select>
+  );
 }
 
 export type DraftField = Partial<FieldDef> & { name: string; kind: string; scope?: "category" | "item" };

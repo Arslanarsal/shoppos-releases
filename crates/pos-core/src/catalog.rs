@@ -822,3 +822,48 @@ pub const FIELD_COLS_PUB: &str = FIELD_COLS;
 pub fn field_row_pub(r: &Row) -> rusqlite::Result<FieldDef> {
     field_row(r)
 }
+
+pub const TRACTOR_BRANDS: &[&str] = &["Massey Ferguson (Millat)", "New Holland (Al-Ghazi)", "Belarus", "Kubota", "John Deere", "Other"];
+pub const TRACTOR_MODELS: &[&str] = &[
+    "MF 240", "MF 260", "MF 350 Plus", "MF 360", "MF 375", "MF 385", "MF 385 4WD", "NH 480", "NH 480S", "NH 55-56", "NH 640", "NH 640 Special",
+    "NH Dabung 85", "NH 70-56", "NH 750", "NH 85-56", "Belarus 510", "Belarus 820",
+];
+
+pub fn tractor_setup(conn: &Connection) -> Result<Value> {
+    let existing: Option<i64> = conn
+        .query_row("SELECT id FROM categories WHERE name='Tractors' COLLATE NOCASE AND archived_at IS NULL", [], |r| r.get(0))
+        .optional()?;
+    let cat = match existing {
+        Some(id) => id,
+        None => category_create(conn, "Tractors")?,
+    };
+    let choice = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let wanted: Vec<(&str, &str, Vec<String>, &str, bool)> = vec![
+        ("Brand", "choice", choice(TRACTOR_BRANDS), "Tractor", true),
+        ("Model", "choice", choice(TRACTOR_MODELS), "Tractor", true),
+        ("Engine number", "text", vec![], "Tractor", false),
+        ("Model year", "int", vec![], "Tractor", true),
+        ("Horsepower", "int", vec![], "Tractor", false),
+        ("Colour", "text", vec![], "Tractor", false),
+        ("Condition", "choice", choice(&["New", "Used"]), "Tractor", true),
+        ("Hours used", "int", vec![], "Tractor", false),
+        ("Registration no.", "text", vec![], "Papers", false),
+        ("Papers / file", "text", vec![], "Papers", false),
+    ];
+    let mut added = 0;
+    for (name, kind, options, group, in_list) in wanted {
+        let have: Option<i64> = conn
+            .query_row("SELECT id FROM field_defs WHERE category_id=?1 AND name=?2 COLLATE NOCASE AND archived_at IS NULL", params![cat, name], |r| r.get(0))
+            .optional()?;
+        if have.is_some() {
+            continue;
+        }
+        let d = FieldDef {
+            id: 0, category_id: Some(cat), item_id: None, name: name.into(), kind: kind.into(), unit: if name == "Horsepower" { "HP".into() } else { String::new() },
+            options, required: false, group_name: group.into(), sort_order: 0, show_in_list: in_list, show_on_receipt: true, archived: false,
+        };
+        field_create(conn, &d)?;
+        added += 1;
+    }
+    Ok(json!({ "category_id": cat, "fields_added": added }))
+}

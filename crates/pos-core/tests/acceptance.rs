@@ -693,3 +693,23 @@ fn field_type_can_change_and_values_are_kept() {
     ok(&core, "field_update", json!({ "id": m, "patch": { "kind": "money" } }));
     assert_eq!(ok(&core, "item_get", json!({ "id": a }))["values"][&m.to_string()], 120050);
 }
+
+#[test]
+fn tractor_setup_adds_fields_once_and_models_can_be_added() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let r = ok(&core, "tractor_setup", json!({}));
+    assert_eq!(r["fields_added"], 10);
+    assert_eq!(ok(&core, "tractor_setup", json!({}))["fields_added"], 0, "running it again changes nothing");
+    let cat = r["category_id"].as_i64().unwrap();
+    let fields = ok(&core, "field_list", json!({ "category_id": cat }));
+    let model = fields.as_array().unwrap().iter().find(|f| f["name"] == "Model").unwrap().clone();
+    let mid = model["id"].as_i64().unwrap();
+    let it = ok(&core, "item_save", json!({ "category_id": cat, "name": "MF 240 red", "tracking": "unique", "identifier": "MF240-0001", "values": { mid.to_string(): "MF 240" } }))["item"]["id"].as_i64().unwrap();
+    let mut opts: Vec<Value> = model["options"].as_array().unwrap().clone();
+    opts.push(json!("MF 260 Turbo"));
+    ok(&core, "field_update", json!({ "id": mid, "patch": { "options": opts } }));
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "MF 260", "tracking": "unique", "identifier": "MF260-0002", "values": { mid.to_string(): "MF 260 Turbo" } }));
+    assert_eq!(ok(&core, "item_get", json!({ "id": it }))["values"][&mid.to_string()], "MF 240");
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "No model yet", "tracking": "unique", "identifier": "X-1" }));
+}

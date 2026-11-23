@@ -174,6 +174,9 @@ export default function SettingsPage(props: { tab: string }) {
             <label className="check">
               <input type="checkbox" checked={s.receipt_show_logo} onChange={(e) => set({ receipt_show_logo: e.target.checked })} /> Print the logo
             </label>
+            <label className="check">
+              <input type="checkbox" checked={s.receipt_watermark !== false} onChange={(e) => set({ receipt_watermark: e.target.checked })} data-testid="set-watermark" /> Light tractor picture behind the receipt
+            </label>
             <p className="muted">To choose which item details are printed, open Categories & fields, press Change on a field and tick Print on receipts.</p>
             <div>
               <button className="btn btn-primary" onClick={() => save()}>
