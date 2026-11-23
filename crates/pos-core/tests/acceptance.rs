@@ -699,7 +699,7 @@ fn tractor_setup_adds_fields_once_and_models_can_be_added() {
     let dir = tempfile::tempdir().unwrap();
     let core = new_shop(dir.path());
     let r = ok(&core, "tractor_setup", json!({}));
-    assert_eq!(r["fields_added"], 10);
+    assert_eq!(r["fields_added"], 11);
     assert_eq!(ok(&core, "tractor_setup", json!({}))["fields_added"], 0, "running it again changes nothing");
     let cat = r["category_id"].as_i64().unwrap();
     let fields = ok(&core, "field_list", json!({ "category_id": cat }));
@@ -711,5 +711,12 @@ fn tractor_setup_adds_fields_once_and_models_can_be_added() {
     ok(&core, "field_update", json!({ "id": mid, "patch": { "options": opts } }));
     ok(&core, "item_save", json!({ "category_id": cat, "name": "MF 260", "tracking": "unique", "identifier": "MF260-0002", "values": { mid.to_string(): "MF 260 Turbo" } }));
     assert_eq!(ok(&core, "item_get", json!({ "id": it }))["values"][&mid.to_string()], "MF 240");
-    ok(&core, "item_save", json!({ "category_id": cat, "name": "No model yet", "tracking": "unique", "identifier": "X-1" }));
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "No model yet", "tracking": "unique" }));
+    let ch = fields.as_array().unwrap().iter().find(|f| f["name"] == "Chassis number").unwrap()["id"].as_i64().unwrap().to_string();
+    let en = fields.as_array().unwrap().iter().find(|f| f["name"] == "Engine number").unwrap()["id"].as_i64().unwrap().to_string();
+    let t1 = ok(&core, "item_save", json!({ "category_id": cat, "name": "T1", "tracking": "unique", "values": { ch.clone(): "MF-001", en.clone(): "E-77" } }))["item"]["id"].as_i64().unwrap();
+    assert!(err(&core, "item_save", json!({ "category_id": cat, "name": "T2", "tracking": "unique", "values": { ch.clone(): "mf 001" } })).contains("T1"));
+    assert!(err(&core, "item_save", json!({ "category_id": cat, "name": "T3", "tracking": "unique", "values": { en.clone(): "E77" } })).contains("T1"));
+    ok(&core, "item_save", json!({ "id": t1, "category_id": cat, "name": "T1 renamed", "tracking": "unique", "values": { ch.clone(): "MF-001" } }));
+    assert_eq!(ok(&core, "item_search", json!({ "text": "T2" }))["total"], 0, "a refused item is not saved");
 }

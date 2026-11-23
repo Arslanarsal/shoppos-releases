@@ -228,15 +228,15 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
             <label className="check">
               <input type="radio" checked={tracking === "unique"} onChange={() => setTracking("unique")} data-testid="tracking-unique" />
               <span>
-                <strong>One of a kind</strong> - a single piece with its own number, like a used scooter with a chassis number
+                <strong>One of a kind</strong> - a single piece, like one tractor or one used scooter
               </span>
             </label>
           </fieldset>
         )}
 
-        {(tracking === "unique" || (editing && identifier)) && (
+        {editing && identifier && (
           <div className="grid4">
-            <Label text={tracking === "unique" ? "Chassis / serial number" : "Item code"} required={tracking === "unique"}>
+            <Label text={tracking === "unique" ? "Number" : "Item code"}>
               <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} className={taken ? "input-bad" : ""} data-testid="item-identifier" />
               {taken && (
                 <span className="field-error" data-testid="identifier-taken">

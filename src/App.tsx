@@ -1,4 +1,3 @@
-import { DeveloperCard } from "./components/Developer";
 import Icon from "./components/Icon";
 import { PhotoHost } from "./components/PhotoViewer";
 import { useCallback, useEffect, useState } from "react";
@@ -180,7 +179,6 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
             ))}
           </nav>
           <BackupBadge />
-          <DeveloperCard compact />
           {!isTauri && <div className="dev-note">Browser test mode</div>}
         </aside>
         <main className="content">

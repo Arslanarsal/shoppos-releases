@@ -664,6 +664,7 @@ pub fn item_save(conn: &Connection, input: &ItemInput) -> Result<i64> {
         conn.execute("UPDATE photos SET sort_order=?1 WHERE id=?2 AND item_id=?3", params![i as i64 + 1, pid, id])?;
     }
 
+    check_unique_fields(conn, id)?;
     let after = item_row(conn, id)?;
     if is_new {
         audit(conn, "item", Some(id), "create", &json!({ "item": after, "values": changes }))?;
@@ -683,7 +684,7 @@ pub fn item_save(conn: &Connection, input: &ItemInput) -> Result<i64> {
 
 fn check_identifier_free(conn: &Connection, identifier: &str, except: Option<i64>) -> Result<()> {
     if identifier.is_empty() {
-        return user("A unique item needs its own number (for example a chassis or serial number)");
+        return Ok(());
     }
     if let Some((n, num)) = identifier_owner(conn, identifier, except)? {
         return user(format!("Chassis / serial number {identifier} is already used by \"{n}\" ({num}). Each one must be different."));
@@ -841,6 +842,7 @@ pub fn tractor_setup(conn: &Connection) -> Result<Value> {
     let wanted: Vec<(&str, &str, Vec<String>, &str, bool)> = vec![
         ("Brand", "choice", choice(TRACTOR_BRANDS), "Tractor", true),
         ("Model", "choice", choice(TRACTOR_MODELS), "Tractor", true),
+        ("Chassis number", "text", vec![], "Tractor", true),
         ("Engine number", "text", vec![], "Tractor", false),
         ("Model year", "int", vec![], "Tractor", true),
         ("Horsepower", "int", vec![], "Tractor", false),
@@ -866,4 +868,30 @@ pub fn tractor_setup(conn: &Connection) -> Result<Value> {
         added += 1;
     }
     Ok(json!({ "category_id": cat, "fields_added": added }))
+}
+
+fn must_be_different(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("chassis") || n.contains("engine number") || n.contains("engine no")
+}
+
+fn check_unique_fields(conn: &Connection, item_id: i64) -> Result<()> {
+    let mine: Vec<(String, String)> = conn
+        .prepare("SELECT f.name, v.v_text FROM item_values v JOIN field_defs f ON f.id=v.field_id WHERE v.item_id=?1 AND v.v_text IS NOT NULL AND v.v_text<>''")?
+        .query_map([item_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<std::result::Result<_, _>>()?;
+    for (fname, val) in mine.into_iter().filter(|(n, _)| must_be_different(n)) {
+        let key = identifier_key(&val);
+        if key.is_empty() {
+            continue;
+        }
+        let others: Vec<(String, String)> = conn
+            .prepare("SELECT i.name, v.v_text FROM item_values v JOIN field_defs f ON f.id=v.field_id JOIN items i ON i.id=v.item_id WHERE f.name=?1 COLLATE NOCASE AND v.item_id<>?2 AND v.v_text IS NOT NULL")?
+            .query_map(params![fname, item_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<std::result::Result<_, _>>()?;
+        if let Some((other, v)) = others.into_iter().find(|(_, v)| identifier_key(v) == key) {
+            return user(format!("{fname} {val} is already used by \"{other}\" ({v}). Each one must be different."));
+        }
+    }
+    Ok(())
 }

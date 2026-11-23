@@ -50,7 +50,7 @@ pub fn status(dir: &Path, machine_id: &str) -> Value {
 pub fn activate(dir: &Path, machine_id: &str, activation: &str) -> crate::error::Result<Value> {
     let code = computer_code(machine_id);
     if !verify(&code, activation) {
-        return Err(crate::error::Error::User("This activation code is not for this computer. Please check it and try again, or call your developer.".into()));
+        return Err(crate::error::Error::User("This activation code is not for this computer. Please check it and try again, or ask the person who set up ShopPOS.".into()));
     }
     std::fs::create_dir_all(dir)?;
     std::fs::write(license_file(dir), clean_activation(activation))?;

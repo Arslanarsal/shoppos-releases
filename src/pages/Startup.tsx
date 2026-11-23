@@ -1,4 +1,3 @@
-import { DeveloperCard } from "../components/Developer";
 import { useEffect, useState } from "react";
 import { call, isTauri, licenseActivate } from "../api";
 import RestoreWizard from "../components/RestoreWizard";
@@ -141,7 +140,7 @@ export function Problem(props: { state: any; onRetry: () => void }) {
         {st.state === "migration_failed" && (
           <div className="stack">
             <p>
-              Your records were not changed. You can keep working with the previous version of the app: ask your developer to send the previous installer, or wait for a fixed update and press Try
+              Your records were not changed. You can keep working with the previous version of the app: ask the person who set up ShopPOS for the previous installer, or wait for a fixed update and press Try
               again.
             </p>
             {safety.length > 0 && (
@@ -159,7 +158,6 @@ export function Problem(props: { state: any; onRetry: () => void }) {
             )}
           </div>
         )}
-        <DeveloperCard />
         {restore && <RestoreWizard onDone={props.onRetry} warnReplace />}
       </div>
     </div>
@@ -186,12 +184,11 @@ export function Activate(props: { code: string; onDone: () => void }) {
     <div className="boot">
       <div className="boot-card wide" data-testid="activate">
         <h1>This copy of ShopPOS is not activated</h1>
-        <p>ShopPOS only works on computers activated by its developer. To use it on this computer, send this computer code to the developer:</p>
+        <p>ShopPOS only works on activated computers. To use it on this computer, send this computer code to the person who set up ShopPOS for you:</p>
         <div className="computer-code" data-testid="computer-code">
           {props.code}
         </div>
-        <DeveloperCard />
-        <Label text="Activation code from the developer">
+        <Label text="Activation code">
           <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid="activation-input" />
         </Label>
         <ErrorBox text={error} />

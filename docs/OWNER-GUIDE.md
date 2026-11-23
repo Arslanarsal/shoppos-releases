@@ -66,7 +66,7 @@ Keep the USB drive somewhere safe. A second drive kept at home is even better: p
 ## Viruses and safety
 
 - The app keeps a checked copy of your shop every hour on this computer, even when a USB drive is chosen.
-- On computers set up by your developer, Windows also copies every backup into a locked folder, `C:\ProgramData\ShopPOS Vault`. Normal programs, and viruses that run as you, cannot change or delete it. To use it: **Settings, Backups, Restore from a backup**, and choose that folder.
+- Windows also copies every backup into a locked folder, `C:\ProgramData\ShopPOS Vault`. Normal programs, and viruses that run as you, cannot change or delete it. To use it: **Settings, Backups, Restore from a backup**, and choose that folder.
 - The USB drive is still the best protection. Unplug it after the backup and keep it safe; a virus cannot reach a drive that is not plugged in.
 - Do not plug in unknown USB sticks and do not install cracked programs on the shop computer.
 
@@ -76,7 +76,7 @@ Your shop data stays on this computer and is never moved by itself. To keep a co
 
 ## New or repaired computer
 
-1. Install ShopPOS (the installer from your developer).
+1. Install ShopPOS (the installer you were given).
 2. Open it and choose **Restore from backup**.
 3. Plug in your backup drive, press **Choose backup drive**, pick the newest backup, press **Restore**.
 
@@ -84,12 +84,9 @@ All items, photos, receipts, settings and your logo come back.
 
 ## Updates
 
-You do not need to do anything. When your developer sends an update, close the app and open it again. It installs the update by itself and keeps all your records.
+You do not need to do anything. When an update is ready, close the app and open it again. It installs the update by itself and keeps all your records.
 
 ## Your shop look
 
 **Settings**: shop name, logo, address, phone, money sign, date style, receipt text, colours and text size. In **Categories & fields**, press **Change** on a field to show it in lists or print it on receipts.
 
-## Help
-
-Your developer: **M. Arslan**, phone / WhatsApp **+923423407767**, email **arslanarsal455@gmail.com**. The same details are at the bottom left of the app and in **Settings, About**.
