@@ -1,0 +1,9 @@
+[package]
+name = "pos-dev"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+pos-core = { path = "../pos-core" }
+serde_json.workspace = true
+tiny_http = "0.12"

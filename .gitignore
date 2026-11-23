@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+src-tauri/gen/
+e2e/.out/
+*.log
+.env
+*.key
+*.key.pub.local
+.shoppos-test-data/
+setup/

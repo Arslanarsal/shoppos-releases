@@ -1,0 +1,132 @@
+name: Release Windows app
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Core tests (ledger, reports, backups, migrations)
+        run: cargo test -p pos-core --locked
+      - name: Typecheck and build screens
+        run: npm run build
+      - name: Browser end to end tests
+        run: |
+          npx playwright-core install --with-deps chromium
+          cargo build -p pos-dev --release --locked
+          CHROME=$(node -e "console.log(require('playwright-core').chromium.executablePath())") npm run test:e2e
+      - name: Check the version is new
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          C=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          [ "$V" = "$C" ] || { echo "package.json $V and tauri.conf.json $C differ. Run npm run version:set"; exit 1; }
+          if gh release view "v$V" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
+            echo "v$V is already published. Run: npm run version:set -- <new version>"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: e2e/.out
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Core tests on Windows
+        run: cargo test -p pos-core --locked
+      - name: Point updates at the release feed
+        shell: bash
+        env:
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          UPDATER_PUBKEY: ${{ vars.UPDATER_PUBKEY }}
+        run: |
+          node -e "
+          const fs=require('fs');const p='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p));
+          c.plugins.updater.endpoints=['https://github.com/'+process.env.RELEASES_REPO+'/releases/latest/download/latest.json'];
+          if(process.env.UPDATER_PUBKEY) c.plugins.updater.pubkey=process.env.UPDATER_PUBKEY;
+          fs.writeFileSync(p,JSON.stringify(c,null,2));"
+      - name: Build signed installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci
+      - name: Collect installer, signature and update feed
+        shell: bash
+        env:
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          D=target/release/bundle/nsis
+          EXE=$(ls $D/*_x64-setup.exe | head -1)
+          SIG="$EXE.sig"
+          test -s "$SIG" || { echo "Missing update signature"; exit 1; }
+          mkdir -p out
+          cp "$EXE" "out/ShopPOS_${V}_x64-setup.exe"
+          cp "$SIG" "out/ShopPOS_${V}_x64-setup.exe.sig"
+          node -e "
+          const fs=require('fs');const v=process.argv[1];const repo=process.argv[2];
+          const sig=fs.readFileSync('out/ShopPOS_'+v+'_x64-setup.exe.sig','utf8').trim();
+          const feed={version:v,notes:'ShopPOS '+v,pub_date:new Date().toISOString(),platforms:{'windows-x86_64':{signature:sig,url:'https://github.com/'+repo+'/releases/download/v'+v+'/ShopPOS_'+v+'_x64-setup.exe'}}};
+          fs.writeFileSync('out/latest.json',JSON.stringify(feed,null,2));" "$V" "$RELEASES_REPO"
+          cat out/latest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: out/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: out
+      - name: Verify the update signature before publishing
+        env:
+          UPDATER_PUBKEY: ${{ vars.UPDATER_PUBKEY }}
+        run: |
+          python3 -m pip install --quiet pynacl
+          PUB="${UPDATER_PUBKEY:-$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")}"
+          python3 scripts/verify_update_sig.py "$PUB" out/*.exe out/*.exe.sig
+      - name: Publish release and update feed
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          gh release create "v$V" out/* --repo "$RELEASES_REPO" --title "ShopPOS $V" --notes "ShopPOS $V" --draft
+          gh release edit "v$V" --repo "$RELEASES_REPO" --draft=false --latest
