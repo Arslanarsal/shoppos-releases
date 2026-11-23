@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { applyLook } from "../App";
 import { call, fileUrl, isTauri, pickFolder, uploadImage } from "../api";
 import { Receipt } from "../components/Pickers";
+import { logoPngFile } from "../components/TractorArt";
 import RestoreWizard from "../components/RestoreWizard";
 import { ago, dateTime, Settings, todayIso } from "../format";
 import { ErrorBox, Label, Modal, Tabs, go, useApp } from "../ui";
@@ -116,6 +117,21 @@ export default function SettingsPage(props: { tab: string }) {
             <button className="btn" onClick={() => logoInput.current?.click()}>
               {settings.shop_logo ? "Change logo" : "Add logo"}
             </button>
+            <button
+              className="btn"
+              onClick={async () => {
+                try {
+                  await uploadImage("logo_store", await logoPngFile(512));
+                  await reloadSettings();
+                  toast("Tractor showroom logo set");
+                } catch (e: any) {
+                  setError(e.message);
+                }
+              }}
+              data-testid="use-showroom-logo"
+            >
+              Use the tractor showroom logo
+            </button>
             <input ref={logoInput} type="file" accept="image/*" hidden onChange={(e) => logo(e.target.files)} data-testid="logo-input" />
           </div>
           <Label text="Shop name" required>
@@ -125,13 +141,14 @@ export default function SettingsPage(props: { tab: string }) {
             <textarea rows={2} value={s.shop_address} onChange={(e) => set({ shop_address: e.target.value })} />
           </Label>
           <div className="row">
-            <Label text="Phone">
+            <Label text="Shop phone">
               <input value={s.shop_phone} onChange={(e) => set({ shop_phone: e.target.value })} />
             </Label>
             <Label text="Email">
               <input value={s.shop_email} onChange={(e) => set({ shop_email: e.target.value })} />
             </Label>
           </div>
+          <ContactsEditor rows={s.contacts ?? []} onChange={(contacts) => set({ contacts })} />
           <div className="row">
             <Label text="Money sign">
               <input value={s.currency_symbol} onChange={(e) => set({ currency_symbol: e.target.value })} style={{ width: 100 }} />
@@ -338,6 +355,37 @@ function IntegrityCheck() {
         Check shop data
       </button>
       {r && <span>{r.ok ? `All good. ${r.counts.items} items, ${r.counts.txns} transactions.` : "Problem found. Restore from your backup drive."}</span>}
+    </div>
+  );
+}
+
+const TITLES = ["Owner", "CEO", "Director", "Managing Director", "General Manager", "Manager", "Sales Manager", "Service Manager", "Accountant", "CTO", "Salesman"];
+
+function ContactsEditor(props: { rows: { name: string; title: string; phone: string }[]; onChange: (rows: { name: string; title: string; phone: string }[]) => void }) {
+  const set = (i: number, p: Partial<{ name: string; title: string; phone: string }>) => props.onChange(props.rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  return (
+    <div className="stack-tight" data-testid="contacts">
+      <span className="lbl-text">Contact numbers (printed on every receipt)</span>
+      {props.rows.map((r, i) => (
+        <div key={i} className="detail-row">
+          <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name" data-testid={`contact-name-${i}`} />
+          <input value={r.title} onChange={(e) => set(i, { title: e.target.value })} placeholder="Title, like CEO or Manager" list="contact-titles" data-testid={`contact-title-${i}`} />
+          <input className="grow" value={r.phone} onChange={(e) => set(i, { phone: e.target.value })} placeholder="Phone number" inputMode="tel" data-testid={`contact-phone-${i}`} />
+          <button type="button" className="btn btn-ghost" aria-label="Take off this number" onClick={() => props.onChange(props.rows.filter((_, j) => j !== i))}>
+            ✕
+          </button>
+        </div>
+      ))}
+      <div>
+        <button type="button" className="btn btn-small" onClick={() => props.onChange([...props.rows, { name: "", title: "", phone: "" }])} data-testid="contact-add">
+          + Add a number
+        </button>
+      </div>
+      <datalist id="contact-titles">
+        {TITLES.map((t) => (
+          <option key={t} value={t} />
+        ))}
+      </datalist>
     </div>
   );
 }

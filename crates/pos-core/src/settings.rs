@@ -15,9 +15,10 @@ pub fn defaults() -> Value {
         "money_decimals": 0,
         "date_format": "DD/MM/YYYY",
         "receipt_header": "",
-        "receipt_footer": "Thank you for shopping with us",
+        "receipt_footer": FOOTER,
         "receipt_show_logo": true,
         "receipt_watermark": true,
+        "contacts": [],
         "theme": "light",
         "accent": "#1d4ed8",
         "font_scale": 1.0,
@@ -29,9 +30,12 @@ pub fn defaults() -> Value {
 
 const ALLOWED: &[&str] = &[
     "shop_name", "shop_logo", "shop_address", "shop_phone", "shop_email", "currency_symbol", "currency_code",
-    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "receipt_watermark", "theme", "accent",
+    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "receipt_watermark", "contacts", "theme", "accent",
     "font_scale", "backup_dest", "backup_interval_minutes",
 ];
+
+pub const OLD_FOOTER: &str = "Thank you for shopping with us";
+pub const FOOTER: &str = "Thank you for your business.\nWarranty and free services as per the manufacturer's terms. Please keep this receipt for warranty, registration and service.";
 
 pub fn get_all(conn: &Connection) -> Result<Value> {
     let mut out = defaults();
@@ -41,6 +45,9 @@ pub fn get_all(conn: &Connection) -> Result<Value> {
     for row in rows {
         let (k, v) = row?;
         if let Ok(val) = serde_json::from_str::<Value>(&v) {
+            if k == "receipt_footer" && val.as_str() == Some(OLD_FOOTER) {
+                continue;
+            }
             obj.insert(k, val);
         }
     }
@@ -80,6 +87,17 @@ fn sanitize(k: &str, v: Value) -> Value {
         "font_scale" => json!(v.as_f64().unwrap_or(1.0).clamp(0.9, 1.5)),
         "backup_interval_minutes" => json!(v.as_i64().unwrap_or(60).clamp(5, 24 * 60)),
         "receipt_show_logo" | "receipt_watermark" => json!(v.as_bool().unwrap_or(true)),
+        "contacts" => {
+            let rows = v.as_array().cloned().unwrap_or_default();
+            let clean = |x: &Value, k: &str| x.get(k).and_then(|s| s.as_str()).unwrap_or("").trim().chars().take(80).collect::<String>();
+            Value::Array(
+                rows.iter()
+                    .map(|r| json!({ "name": clean(r, "name"), "title": clean(r, "title"), "phone": clean(r, "phone") }))
+                    .filter(|r| r["name"] != "" || r["title"] != "" || r["phone"] != "")
+                    .take(20)
+                    .collect(),
+            )
+        }
         "theme" => json!(if v.as_str() == Some("dark") { "dark" } else { "light" }),
         _ => match v {
             Value::String(s) => Value::String(s.chars().take(2000).collect()),
@@ -96,6 +114,6 @@ pub fn receipt_snapshot(conn: &Connection) -> Result<Value> {
         "shop_name": pick("shop_name"), "shop_logo": pick("shop_logo"), "shop_address": pick("shop_address"),
         "shop_phone": pick("shop_phone"), "shop_email": pick("shop_email"), "currency_symbol": pick("currency_symbol"),
         "money_decimals": pick("money_decimals"), "date_format": pick("date_format"), "receipt_header": pick("receipt_header"),
-        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "receipt_watermark": pick("receipt_watermark"), "accent": pick("accent")
+        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "receipt_watermark": pick("receipt_watermark"), "contacts": pick("contacts"), "accent": pick("accent")
     }))
 }

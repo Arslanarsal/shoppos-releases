@@ -1,4 +1,5 @@
 import Icon from "./components/Icon";
+import { ShowroomLogo, TractorDrawing } from "./components/TractorArt";
 import { PhotoHost } from "./components/PhotoViewer";
 import { useCallback, useEffect, useState } from "react";
 import { call, fileUrl, isTauri, runUpdate, licenseStatus } from "./api";
@@ -17,6 +18,8 @@ import SettingsPage from "./pages/Settings";
 import { Activate, Welcome, Problem } from "./pages/Startup";
 
 type Boot = { phase: "update" | "opening" | "done" | "locked"; state?: any; update?: string; code?: string };
+
+const WATERMARK: Record<string, number> = { "/": 0, "/sale": 1, "/purchase": 1, "/items": 2, "/reports": 0, "/history": 2, "/categories": 1, "/settings": 2 };
 
 export function applyLook(s: Partial<Settings>) {
   const root = document.documentElement;
@@ -165,7 +168,7 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
       <div className="shell">
         <aside className="side no-print">
           <div className="brand" onClick={() => go("/")}>
-            {settings.shop_logo ? <img src={fileUrl(settings.shop_logo)} alt="" /> : <div className="brand-mark">{settings.shop_name.slice(0, 1)}</div>}
+            {settings.shop_logo ? <img src={fileUrl(settings.shop_logo)} alt="" /> : <ShowroomLogo size={40} className="brand-logo" />}
             <span>{settings.shop_name}</span>
           </div>
           <nav>
@@ -182,6 +185,7 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
           {!isTauri && <div className="dev-note">Browser test mode</div>}
         </aside>
         <main className="content">
+          <TractorDrawing variant={WATERMARK[route.path] ?? 0} className="app-watermark no-print" testid="app-watermark" />
           <BackupBanner />
           {page}
         </main>

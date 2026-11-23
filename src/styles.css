@@ -1493,3 +1493,28 @@ details summary {
 .receipt > *:not(.r-watermark) {
   position: relative;
 }
+
+.app-watermark {
+  position: fixed;
+  right: 2rem;
+  bottom: 1.5rem;
+  width: min(42vw, 560px);
+  color: var(--text);
+  opacity: 0.045;
+  pointer-events: none;
+  z-index: 0;
+}
+.content > *:not(.app-watermark) {
+  position: relative;
+  z-index: 1;
+}
+.brand-logo {
+  flex-shrink: 0;
+}
+.r-contact {
+  font-size: 0.85rem;
+}
+.boot > *:not(.app-watermark) {
+  position: relative;
+  z-index: 1;
+}
