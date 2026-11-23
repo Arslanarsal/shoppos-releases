@@ -3,6 +3,7 @@ pub mod backup;
 pub mod catalog;
 pub mod db;
 pub mod error;
+pub mod license;
 pub mod reports;
 pub mod search;
 pub mod settings;

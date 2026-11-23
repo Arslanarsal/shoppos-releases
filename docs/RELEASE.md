@@ -98,6 +98,16 @@ Output: `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
 
 The app uses Microsoft WebView2, which Windows 10 (version 1803 and newer) gets through Windows Update. If a computer does not have it, the installer installs it (an internet connection is needed for that first install only). After that the app works offline.
 
+## Computer lock (activation)
+
+ShopPOS only opens on computers you activated. On any other computer it shows "This copy of ShopPOS is not activated", the computer code and your contact details.
+
+- Your private key: `~/.shoppos-license/license.key`. Keep a copy offline. Never commit it. Without it you cannot activate new computers (existing ones keep working).
+- To activate a computer: the owner sends you the code on the screen (like `ABBB-7D17-B1DD-6F32`). Run `python3 scripts/make-activation.py ABBB-7D17-B1DD-6F32` (needs `pip install pynacl`) and send back the code it prints. They paste it and press Activate.
+- The activation is saved in `%LOCALAPPDATA%\ShopPOS License\license.txt`, outside the shop data, so restores and updates keep it.
+- The shop PC (code `ABBB-7D17-B1DD-6F32`) is already activated. Its code is kept in `~/.shoppos-license/shop-pc.txt`.
+- The repository is public, so someone skilled could build an unlocked copy from the code. To stop that, make this repository private and publish releases from a separate public repository (see Repository above).
+
 ## Testing on the shop computer
 
 `TARGET=windows node e2e/run.mjs` runs the full user test (48 checks) against the real installed app on the shop PC over SSH (`PC` and `PC_KEY` choose the computer and key). It uses its own data folder under `C:\Users\Public\pc\test`, never the shop's data.

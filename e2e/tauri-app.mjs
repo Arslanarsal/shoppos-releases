@@ -4,6 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { activationFor } from "./license.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const app = process.env.APP_BIN ?? path.join(root, "target", "debug", "shoppos");
@@ -45,7 +46,7 @@ async function startApp(env) {
       }
       await wait(250);
     }
-    throw new Error(`timed out waiting for ${what}`);
+    throw new Error(`timed out waiting for ${what}. Screen: ${(await text().catch(() => "?")).slice(0, 300)}`);
   };
   const text = () => js("return document.body.innerText");
   const call = (cmd, args = {}) => js("return window.__TAURI_INTERNALS__.invoke('call', {cmd: arguments[0], args: arguments[1]})", cmd, args);
@@ -95,6 +96,28 @@ function feedServer(port, feed) {
 async function main() {
   const data = path.join(work, "data");
   const base = { SHOPPOS_DATA_DIR: data };
+
+  {
+    const a = await startApp(base);
+    try {
+      await a.until(async () => (await a.text()).includes("not activated"), "activation screen");
+      const code = await a.js("return document.querySelector('[data-testid=computer-code]').textContent.trim()");
+      check(!fs.existsSync(path.join(data, "shop.db")), "lock: on a computer without activation the shop does not open");
+      const other = activationFor("some-other-computer").activation;
+      await a.set('[data-testid="activation-input"]', other);
+      await a.click('[data-testid="activation-save"]');
+      await a.until(async () => (await a.text()).includes("not for this computer"), "wrong code message");
+      check(true, "lock: an activation code made for another computer is refused");
+      const { code: mine, activation } = activationFor(fs.readFileSync("/etc/machine-id", "utf8"));
+      check(code === mine, `lock: the screen shows this computer's code ${code}`);
+      await a.set('[data-testid="activation-input"]', activation);
+      await a.click('[data-testid="activation-save"]');
+      await a.until(async () => (await a.text()).includes("Welcome to ShopPOS"), "welcome after activation");
+      check(fs.existsSync(path.join(work, "ShopPOS License", "license.txt")), "lock: the right code opens the shop and is remembered");
+    } finally {
+      await a.close();
+    }
+  }
 
   {
     const a = await startApp({ ...base, SHOPPOS_UPDATE_URL: "http://127.0.0.1:9/latest.json" });

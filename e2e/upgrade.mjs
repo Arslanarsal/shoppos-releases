@@ -4,6 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { licenseThisComputer } from "./license.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 let app = path.join(root, "target", "debug", "shoppos");
@@ -95,6 +96,7 @@ function feedServer(port, feed) {
 async function main() {
   const data = path.join(work, "data");
   const env = { SHOPPOS_DATA_DIR: data, SHOPPOS_NO_UPDATE: "1" };
+  licenseThisComputer(path.join(work, "ShopPOS License"));
   app = process.env.OLD_BIN;
   const a = await startApp(env);
   let receiptBefore;

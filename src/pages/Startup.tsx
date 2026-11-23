@@ -1,6 +1,6 @@
 import { DeveloperCard } from "../components/Developer";
 import { useEffect, useState } from "react";
-import { call, isTauri } from "../api";
+import { call, isTauri, licenseActivate } from "../api";
 import RestoreWizard from "../components/RestoreWizard";
 import { ErrorBox, Label } from "../ui";
 
@@ -161,6 +161,45 @@ export function Problem(props: { state: any; onRetry: () => void }) {
         )}
         <DeveloperCard />
         {restore && <RestoreWizard onDone={props.onRetry} warnReplace />}
+      </div>
+    </div>
+  );
+}
+
+export function Activate(props: { code: string; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      await licenseActivate(text.trim());
+      props.onDone();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="boot">
+      <div className="boot-card wide" data-testid="activate">
+        <h1>This copy of ShopPOS is not activated</h1>
+        <p>ShopPOS only works on computers activated by its developer. To use it on this computer, send this computer code to the developer:</p>
+        <div className="computer-code" data-testid="computer-code">
+          {props.code}
+        </div>
+        <DeveloperCard />
+        <Label text="Activation code from the developer">
+          <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} data-testid="activation-input" />
+        </Label>
+        <ErrorBox text={error} />
+        <div>
+          <button className="btn btn-primary" onClick={go} disabled={busy || !text.trim()} data-testid="activation-save">
+            Activate
+          </button>
+        </div>
       </div>
     </div>
   );

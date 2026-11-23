@@ -121,6 +121,10 @@ async function main() {
   const dataB = P.join(work, "pc2");
   const usb = P.join(work, "usb-drive");
   disk.mkdir(usb);
+  if (REMOTE) {
+    const act = fs.readFileSync(path.join(os.homedir(), ".shoppos-license", "shop-pc.txt"), "utf8").trim().split("\n")[1].trim();
+    ps(`New-Item -ItemType Directory -Force '${P.join(work, "ShopPOS License")}' | Out-Null; Set-Content -NoNewline '${P.join(work, "ShopPOS License", "license.txt")}' '${act}'`);
+  }
   const portA = 5191;
   const portB = 5192;
   const browser = REMOTE ? null : await chromium.launch({ executablePath: chrome, headless: true });

@@ -25,6 +25,37 @@ fn log_line(core: &Core, msg: &str) {
     }
 }
 
+fn machine_id() -> String {
+    #[cfg(windows)]
+    {
+        use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY};
+        if let Ok(k) = winreg::RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags("SOFTWARE\\Microsoft\\Cryptography", KEY_READ | KEY_WOW64_64KEY) {
+            if let Ok(v) = k.get_value::<String, _>("MachineGuid") {
+                return v;
+            }
+        }
+        String::new()
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::read_to_string("/etc/machine-id").unwrap_or_default()
+    }
+}
+
+fn license_dir(core: &Core) -> std::path::PathBuf {
+    core.data_dir.parent().map(|p| p.join("ShopPOS License")).unwrap_or_else(|| core.data_dir.join("license"))
+}
+
+#[tauri::command]
+fn license_status(core: State<'_, AppCore>) -> Value {
+    pos_core::license::status(&license_dir(&core.0), &machine_id())
+}
+
+#[tauri::command]
+fn license_activate(core: State<'_, AppCore>, code: String) -> Result<Value, String> {
+    pos_core::license::activate(&license_dir(&core.0), &machine_id(), &code).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn update_run(app: AppHandle, core: State<'_, AppCore>) -> Result<Value, String> {
     let core = core.0.clone();
@@ -147,7 +178,7 @@ pub fn run() {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![call, update_run])
+        .invoke_handler(tauri::generate_handler![call, update_run, license_status, license_activate])
         .run(tauri::generate_context!())
         .expect("error while running ShopPOS");
 }

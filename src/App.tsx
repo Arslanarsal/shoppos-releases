@@ -2,7 +2,7 @@ import { DeveloperCard } from "./components/Developer";
 import Icon from "./components/Icon";
 import { PhotoHost } from "./components/PhotoViewer";
 import { useCallback, useEffect, useState } from "react";
-import { call, fileUrl, isTauri, runUpdate } from "./api";
+import { call, fileUrl, isTauri, runUpdate, licenseStatus } from "./api";
 import { ago, setFormat, Settings } from "./format";
 import { AppCtx, go, useApp, useRoute, useToasts } from "./ui";
 import Home from "./pages/Home";
@@ -15,9 +15,9 @@ import TxnPage from "./pages/Txn";
 import ReportsPage from "./pages/Reports";
 import CategoriesPage from "./pages/Categories";
 import SettingsPage from "./pages/Settings";
-import { Welcome, Problem } from "./pages/Startup";
+import { Activate, Welcome, Problem } from "./pages/Startup";
 
-type Boot = { phase: "update" | "opening" | "done"; state?: any; update?: string };
+type Boot = { phase: "update" | "opening" | "done" | "locked"; state?: any; update?: string; code?: string };
 
 export function applyLook(s: Partial<Settings>) {
   const root = document.documentElement;
@@ -41,6 +41,11 @@ export default function App() {
         setBoot({ phase: "update", update: "Installing the new version. The app will open again by itself." });
       }
     });
+    const lic = await licenseStatus().catch(() => ({ ok: false, computer_code: "" }));
+    if (!lic.ok) {
+      setBoot({ phase: "locked", code: lic.computer_code });
+      return;
+    }
     setBoot({ phase: "opening", update: u.status === "failed" ? `An update was found but not installed (${u.message}). You are using the current version.` : "" });
     const st = await call("open");
     setBoot({ phase: "done", state: st, update: u.status === "failed" ? `An update was found but could not be installed safely, so the current version was kept. (${u.message})` : "" });
@@ -50,6 +55,7 @@ export default function App() {
     startup();
   }, [startup]);
 
+  if (boot.phase === "locked") return <Activate code={boot.code ?? ""} onDone={startup} />;
   if (boot.phase !== "done") {
     return (
       <div className="boot">
@@ -205,7 +211,6 @@ function BackupBanner() {
   if (!backup) return null;
   let text = "";
   if (backup.last_error && backup.dest_chosen && !backup.dest_available) text = backup.last_error;
-  else if (!backup.dest_chosen) text = "Your shop is only saved on this computer. Choose a second drive (like a USB drive) for automatic backups, so you never lose your records.";
   else if (backup.last_error) text = `The last backup did not finish: ${backup.last_error}`;
   else if (backup.minutes_since_success !== null && backup.minutes_since_success > 60 * 48) text = `The last backup was ${ago(backup.last_success_at)}.`;
   if (!text) return null;

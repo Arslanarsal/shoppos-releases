@@ -91,3 +91,14 @@ export async function runUpdate(onProgress: (p: any) => void): Promise<UpdateRes
     un();
   }
 }
+
+export type LicenseStatus = { ok: boolean; computer_code: string };
+
+export async function licenseStatus(): Promise<LicenseStatus> {
+  if (!isTauri) return { ok: true, computer_code: "" };
+  return invoke<LicenseStatus>("license_status");
+}
+
+export async function licenseActivate(code: string): Promise<LicenseStatus> {
+  return invoke<LicenseStatus>("license_activate", { code });
+}
