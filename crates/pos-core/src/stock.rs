@@ -114,6 +114,22 @@ pub struct DocInput {
     #[serde(default)]
     pub discount: i64,
     pub lines: Vec<LineInput>,
+    #[serde(default)]
+    pub photos: Vec<crate::catalog::PhotoRef>,
+}
+
+fn insert_txn_photos(tx: &Connection, txn_id: i64, photos: &[crate::catalog::PhotoRef]) -> Result<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    for (i, p) in photos.iter().enumerate() {
+        if !p.file.starts_with("photos/") || p.file.contains("..") || p.file.contains('\\') {
+            return user("A picture could not be attached. Please add it again.");
+        }
+        tx.execute(
+            "INSERT INTO txn_photos(txn_id,file,sha256,bytes,original_name,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            params![txn_id, p.file, p.sha256, p.bytes, p.original_name, i as i64, now],
+        )?;
+    }
+    Ok(())
 }
 
 fn existing_token(conn: &Connection, token: &str) -> Result<Option<i64>> {
@@ -312,6 +328,7 @@ pub fn purchase_post(conn: &mut Connection, d: &DocInput) -> Result<Value> {
         let line_id = insert_line(&tx, txn_id, i as i64 + 1, l.item_id, l.qty, 1, l.unit_price, l.line_discount, alloc[i], net, net, None, &desc, &details)?;
         insert_move(&tx, txn_id, line_id, l.item_id, line_id, &date, l.qty, net, &date)?;
     }
+    insert_txn_photos(&tx, txn_id, &d.photos)?;
     tx.commit()?;
     txn_get(conn, txn_id)
 }
@@ -351,6 +368,7 @@ pub fn sale_post(conn: &mut Connection, d: &DocInput) -> Result<Value> {
         let line_id = insert_line(&tx, txn_id, i as i64 + 1, l.item_id, l.qty, -1, l.unit_price, l.line_discount, alloc[i], net, cost, None, &desc, &details)?;
         apply_plan(&tx, txn_id, line_id, l.item_id, &plan, &date)?;
     }
+    insert_txn_photos(&tx, txn_id, &d.photos)?;
     tx.commit()?;
     txn_get(conn, txn_id)
 }
@@ -693,6 +711,11 @@ pub fn txn_get(conn: &Connection, id: i64) -> Result<Value> {
         }
     }
     t["lines"] = Value::Array(lines);
+    let photos: Vec<Value> = conn
+        .prepare("SELECT id, file, original_name FROM txn_photos WHERE txn_id=?1 ORDER BY sort_order, id")?
+        .query_map([id], |r| Ok(json!({ "id": r.get::<_, i64>(0)?, "file": r.get::<_, String>(1)?, "original_name": r.get::<_, String>(2)? })))?
+        .collect::<std::result::Result<_, _>>()?;
+    t["photos"] = Value::Array(photos);
     let rev = conn
         .query_row("SELECT id, number, business_date, reason FROM txns WHERE kind='reversal' AND related_txn_id=?1", [id], |r| {
             Ok(json!({ "id": r.get::<_, i64>(0)?, "number": r.get::<_, String>(1)?, "business_date": r.get::<_, String>(2)?, "reason": r.get::<_, String>(3)? }))

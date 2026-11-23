@@ -14,6 +14,7 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "initial", sql: include_str!("../migrations/0001_initial.sql") },
     Migration { version: 2, name: "reorder level", sql: include_str!("../migrations/0002_reorder_level.sql") },
     Migration { version: 3, name: "item condition", sql: include_str!("../migrations/0003_item_condition.sql") },
+    Migration { version: 4, name: "photos on sales and purchases", sql: include_str!("../migrations/0004_txn_photos.sql") },
 ];
 
 pub fn latest_version() -> i64 {

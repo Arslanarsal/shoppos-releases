@@ -253,6 +253,13 @@ async function main() {
     await pick(page, "Office desk");
     await page.fill('[data-testid="qty-0"]', "3");
     check((await page.inputValue('[data-testid="price-0"]')) === "12000", "usual price filled in");
+    const salePics = [await makeJpeg(page, "cnic.jpg", "#335577", "CNIC"), await makeJpeg(page, "desk-sold.jpg", "#775533", "SOLD"), await makeJpeg(page, "slip.jpg", "#557733", "SLIP")];
+    await page.setInputFiles('[data-testid="trade-photo-input"]', salePics);
+    await page.waitForFunction(() => document.querySelectorAll(".trade-photo img").length === 3);
+    await page.click(".trade-photo:nth-child(2) .trade-photo-x");
+    await page.setInputFiles('[data-testid="trade-photo-input"]', [salePics[1]]);
+    await page.waitForFunction(() => document.querySelectorAll(".trade-photo img").length === 3);
+    check(true, "3 photos added next to the customer, one taken off and added again");
     check((await page.textContent('[data-testid="trade-total"]')) === "Rs 36,000", "sale total before confirm");
     await page.click('[data-testid="trade-review"]');
     await page.click('[data-testid="trade-confirm"]');
@@ -261,7 +268,11 @@ async function main() {
     check(rtext.includes("Arslan Furniture and Bikes") && rtext.includes("Rs 36,000") && rtext.includes("Bilal"), "branded receipt with total");
     check(await photoLoaded(page, ".r-logo"), "logo on receipt");
     await shot(page, "B-receipt");
-    await page.click('[data-testid="trade-new"]');
+    await page.click("text=Open record");
+    await page.locator('[data-testid="txn-photos"] img').first().waitFor();
+    check((await page.locator('[data-testid="txn-photos"] img').count()) === 3 && (await photoLoaded(page, '[data-testid="txn-photos"] img')), "sale record shows its 3 photos");
+    await shot(page, "B-sale-photos");
+    await page.goto(base + "#/sale");
 
     step = "B reports";
     await page.goto(base + "#/reports");
@@ -362,6 +373,24 @@ async function main() {
     const all = await page.textContent('[data-testid="items-table"]');
     check(all.includes("Damaged") && all.includes("Sold") && all.includes("In stock"), "items page shows everything with status in one place");
     await shot(page, "F-all-items");
+    step = "G add item with stock";
+    await page.goto(base + "#/item/new");
+    await page.fill('[data-testid="item-name"]', "Plastic chair");
+    await page.selectOption('[data-testid="item-category"]', { label: "Furniture" });
+    await page.fill('[data-testid="item-qty"]', "20");
+    await page.fill('[data-testid="item-buy-price"]', "1500");
+    await page.fill('[data-testid="item-price"]', "2000");
+    await page.fill('[data-testid="item-supplier"]', "Karachi Plastics");
+    check((await page.textContent('[data-testid="stock-preview"]')).includes("Rs 30,000") && (await page.textContent('[data-testid="stock-preview"]')).includes("profit of Rs 500"), "form shows total paid and profit per piece");
+    await page.click('[data-testid="item-save"]');
+    await page.locator('[data-testid="stock-now"]', { hasText: "20" }).waitFor();
+    check(true, "new item opens with 20 in stock");
+    const chair = (await api(portA, "item_search", { text: "Plastic chair" })).data.rows[0];
+    check(chair.stock === 20 && chair.money.bought_cost === 3000000, "stock saved as a purchase of 20 at Rs 1,500");
+    const ph = await api(portA, "line_search", { kinds: ["purchase"], text: "Plastic chair" });
+    check(ph.data.total === 1 && JSON.stringify(ph.data).includes("Karachi Plastics"), "purchase record with supplier is in history");
+    await shot(page, "G-item-with-stock");
+
     const exportDir = P.join(work, "export-drive");
     disk.mkdir(exportDir);
     await page.goto(base + "#/settings?tab=backup");
@@ -415,6 +444,7 @@ async function main() {
     check(await photoLoaded(page, '[data-testid="item-photo"]'), "photo restored");
     await page.goto(baseB + `#/txn/2`);
     check(await photoLoaded(page, ".r-logo"), "receipt logo restored");
+    check((await page.locator('[data-testid="txn-photos"] img').count()) === 3 && (await photoLoaded(page, '[data-testid="txn-photos"] img')), "sale photos restored");
     await shot(page, "D-restored-receipt");
     srvB.kill();
   } catch (e) {

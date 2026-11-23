@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { call, newToken } from "../api";
+import { call, fileUrl, newToken } from "../api";
 import { Receipt } from "../components/Pickers";
 import { date, kindLabel, money, todayIso } from "../format";
 import { ErrorBox, Label, Modal, go, useApp, useAsync } from "../ui";
@@ -61,6 +61,18 @@ export default function TxnPage(props: { id: number }) {
           </div>
         )}
       </div>
+      {t.photos?.length > 0 && (
+        <div className="card no-print">
+          <h2>Photos ({t.photos.length})</h2>
+          <div className="txn-photos" data-testid="txn-photos">
+            {t.photos.map((p: any) => (
+              <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
+                <img src={fileUrl(p.file)} alt={p.original_name} />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="receipt-wrap">
         <Receipt txn={t} />
       </div>

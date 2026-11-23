@@ -107,7 +107,7 @@ export default function ItemView(props: { id: number }) {
             </div>
             {it.sale_price !== null && (
               <div className="stat">
-                <span>Usual price</span>
+                <span>Selling price</span>
                 <strong>{money(it.sale_price)}</strong>
               </div>
             )}

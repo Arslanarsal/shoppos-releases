@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { call, newToken } from "../api";
+import { call, fileUrl, newToken, uploadImage } from "../api";
 import { ItemPicker, PickedItem, Receipt } from "../components/Pickers";
 import { money, moneyInput, parseMoney, parseQty, todayIso } from "../format";
 import { ErrorBox, Label, Modal, go, useApp } from "../ui";
@@ -22,6 +22,24 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
   const [done, setDone] = useState<any>(null);
   const [newItem, setNewItem] = useState(false);
   const submitting = useRef(false);
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const addPhotos = async (files: FileList | null) => {
+    const list = Array.from(files ?? []);
+    if (photoInput.current) photoInput.current.value = "";
+    setUploading((n) => n + list.length);
+    for (const f of list) {
+      try {
+        const p = await uploadImage("photo_store", f);
+        setPhotos((x) => [...x, p]);
+      } catch (e: any) {
+        toast(`${f.name}: ${e.message}`, "error");
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!props.preset) return;
@@ -85,6 +103,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
         notes,
         discount: disc || 0,
         lines: lines.map((l, i) => ({ item_id: l.item.id, qty: calc[i].q, unit_price: calc[i].p, line_discount: calc[i].d })),
+        photos,
       });
       setConfirm(false);
       setDone(r);
@@ -103,6 +122,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
     setParty("");
     setNotes("");
     setDiscount("");
+    setPhotos([]);
     setDone(null);
     setToken(newToken());
     if (props.preset) go(sale ? "/sale" : "/purchase");
@@ -121,6 +141,23 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
           <Label text={sale ? "Customer (optional)" : "Supplier (optional)"}>
             <input value={party} onChange={(e) => setParty(e.target.value)} data-testid="trade-party" />
           </Label>
+          <div className="lbl">
+            <span className="lbl-text">Photos (optional)</span>
+            <div className="row trade-photos">
+              {photos.map((p, i) => (
+                <div key={p.file + i} className="trade-photo">
+                  <img src={fileUrl(p.file)} alt={p.original_name} />
+                  <button type="button" className="trade-photo-x" onClick={() => setPhotos((x) => x.filter((_, j) => j !== i))} aria-label="Take off this photo">
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="btn" onClick={() => photoInput.current?.click()} disabled={uploading > 0} data-testid="trade-photo-add">
+                {uploading > 0 ? "Adding..." : photos.length ? "+ More photos" : "+ Add photos"}
+              </button>
+              <input ref={photoInput} type="file" accept="image/*" multiple hidden onChange={(e) => addPhotos(e.target.files)} data-testid="trade-photo-input" />
+            </div>
+          </div>
         </div>
         <div className="row nowrap">
           <div className="grow">

@@ -524,3 +524,24 @@ fn backup_runs_beside_sales_and_keeps_a_local_copy() {
     let on_usb = ok(&core, "restore_find", json!({ "path": usb.display().to_string() }));
     assert!(on_usb.as_array().map(|a| !a.is_empty()).unwrap_or(false));
 }
+
+#[test]
+fn sale_photos_are_kept_and_cannot_be_removed() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let (_, desk) = setup_desks(&core);
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 2, "unit_price": 100 }] }));
+    let mut pics = vec![];
+    for t in 1..=4u8 {
+        pics.push(ok(&core, "photo_store", json!({ "name": format!("p{t}.jpg"), "data": b64(&jpeg(t)) })));
+    }
+    let s = ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "party": "Bilal", "photos": pics, "lines": [{ "item_id": desk, "qty": 1, "unit_price": 200 }] }));
+    assert_eq!(s["photos"].as_array().unwrap().len(), 4);
+    let bad = err(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "photos": [{ "file": "../shop.db", "sha256": "x", "bytes": 1 }], "lines": [{ "item_id": desk, "qty": 1, "unit_price": 200 }] }));
+    assert!(bad.contains("picture"));
+    let db = rusqlite::Connection::open(dir.path().join("shop.db")).unwrap();
+    assert!(db.execute("DELETE FROM txn_photos", []).is_err());
+    assert!(db.execute("UPDATE txn_photos SET file='x'", []).is_err());
+    let n: i64 = db.query_row("SELECT COUNT(*) FROM txn_lines WHERE txn_id=?1", [s["id"].as_i64().unwrap() + 1], |r| r.get(0)).unwrap();
+    assert_eq!(n, 0, "a refused sale leaves nothing behind");
+}
