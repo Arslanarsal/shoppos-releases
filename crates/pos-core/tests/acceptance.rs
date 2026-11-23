@@ -371,7 +371,7 @@ fn e_upgrade_v1_to_v2_keeps_data() {
     let st = v2.open();
     assert_eq!(st["state"], "ready", "{st}");
     assert_eq!(st["migrated_from"], 1);
-    assert_eq!(st["schema_version"], 2);
+    assert_eq!(st["schema_version"], pos_core::db::latest_version());
     let safety = st["safety_copy"].as_str().unwrap();
     let sc = rusqlite::Connection::open(safety).unwrap();
     assert_eq!(pos_core::db::schema_version(&sc).unwrap(), 1);
@@ -396,7 +396,7 @@ fn e_failed_migration_keeps_data_and_recovers() {
     let broken = Core::with_migrations(t.path(), "9.9.9", bad);
     let st = broken.open();
     assert_eq!(st["state"], "migration_failed", "{st}");
-    assert_eq!(st["schema_version"], 2);
+    assert_eq!(st["schema_version"], pos_core::db::latest_version());
     assert!(st["message"].as_str().unwrap().contains("left exactly as it was"));
     assert!(Path::new(st["safety_copy"].as_str().unwrap()).exists());
     assert!(!broken.is_open());
@@ -438,4 +438,59 @@ fn photos_reject_non_images() {
     let t = tempfile::tempdir().unwrap();
     let core = new_shop(t.path());
     assert!(err(&core, "photo_store", json!({ "name": "x.exe", "data": b64(b"MZ\x90\x00") })).contains("not a picture"));
+}
+
+#[test]
+fn month_end_profit_loss_status_and_export() {
+    let t = tempfile::tempdir().unwrap();
+    let core = new_shop(&t.path().join("data"));
+    let cat = ok(&core, "category_create", json!({ "name": "Bikes" }))["id"].as_i64().unwrap();
+    let good = ok(&core, "item_save", json!({ "category_id": cat, "name": "Road bike", "tracking": "unique", "identifier": "RB1" }))["item"]["id"].as_i64().unwrap();
+    let bad = ok(&core, "item_save", json!({ "category_id": cat, "name": "Old bike", "tracking": "unique", "identifier": "OB1" }))["item"]["id"].as_i64().unwrap();
+    let helmets = ok(&core, "item_save", json!({ "category_id": cat, "name": "Helmet" }))["item"]["id"].as_i64().unwrap();
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-06-01", "lines": [
+        { "item_id": good, "qty": 1, "unit_price": 5000000 }, { "item_id": bad, "qty": 1, "unit_price": 4000000 }, { "item_id": helmets, "qty": 10, "unit_price": 100000 }] }));
+    ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-06-10", "lines": [{ "item_id": good, "qty": 1, "unit_price": 7000000 }] }));
+    ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-06-12", "lines": [{ "item_id": bad, "qty": 1, "unit_price": 3000000 }] }));
+    ok(&core, "adjust_post", json!({ "client_token": tok(), "business_date": "2026-06-20", "item_id": helmets, "delta": -2, "reason": "Damaged in storage" }));
+
+    let m = ok(&core, "report_month_end", json!({ "from": "2026-06-01", "to": "2026-06-30" }));
+    assert_eq!(m["total_profit"], 2000000);
+    assert_eq!(m["total_loss"], 1000000 + 200000);
+    assert_eq!(m["net_result"], 800000);
+    assert_eq!(m["sold"]["qty"], 2);
+    assert_eq!(m["unsold"]["qty"], 8);
+    assert_eq!(m["unsold"]["value"], 800000);
+    let losses: Vec<&str> = m["loss_items"].as_array().unwrap().iter().map(|r| r["name"].as_str().unwrap()).collect();
+    assert_eq!(losses, vec!["Old bike", "Helmet"]);
+    assert_eq!(m["write_offs"][0]["reason"], "Damaged in storage");
+
+    let it = ok(&core, "item_get", json!({ "id": bad }));
+    assert_eq!(it["money"]["status"], "sold");
+    assert_eq!(it["money"]["profit"], -1000000);
+    assert_eq!(it["money"]["first_bought"], "2026-06-01");
+    assert_eq!(it["money"]["last_sold"], "2026-06-12");
+    assert_eq!(it["money"]["last_sale_price"], 3000000);
+
+    ok(&core, "item_set_condition", json!({ "id": helmets, "condition": "damaged" }));
+    let dmg = ok(&core, "item_search", json!({ "status": "damaged" }));
+    assert_eq!(dmg["total"], 1);
+    assert_eq!(dmg["rows"][0]["status"], "damaged");
+    let sold = ok(&core, "item_search", json!({ "status": "sold" }));
+    assert_eq!(sold["total"], 2);
+    ok(&core, "item_archive", json!({ "id": good, "archived": true }));
+    let all = ok(&core, "item_search", json!({ "status": "all" }));
+    assert_eq!(all["total"], 3);
+    let st: Vec<&str> = all["rows"].as_array().unwrap().iter().map(|r| r["status"].as_str().unwrap()).collect();
+    assert_eq!(st, vec!["damaged", "sold", "inactive"]);
+
+    let usb = t.path().join("usb");
+    std::fs::create_dir_all(&usb).unwrap();
+    let before = ok(&core, "backup_status", json!({}));
+    let ex = ok(&core, "export_full", json!({ "path": usb.display().to_string() }));
+    assert!(ex["path"].as_str().unwrap().contains("ShopPOS Backups"));
+    assert_eq!(ok(&core, "backup_status", json!({}))["last_success_at"], before["last_success_at"]);
+    let found = ok(&core, "restore_find", json!({ "path": usb.display().to_string() }));
+    assert_eq!(found.as_array().unwrap().len(), 1);
+    assert!(t.path().join("data").join("shop.db").exists(), "export copies, never moves");
 }

@@ -108,6 +108,10 @@ pub fn run(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &s
     res
 }
 
+pub fn export_copy(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &str) -> Result<Value> {
+    run_inner(conn, data_dir, dest_root, app_version, true)
+}
+
 fn run_inner(conn: &Connection, data_dir: &Path, dest_root: &Path, app_version: &str, deep: bool) -> Result<Value> {
     check_dest(dest_root)?;
     let shop_id = db::meta_get(conn, "shop_id")?.unwrap_or_else(|| "unknown".into());

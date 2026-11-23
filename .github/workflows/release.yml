@@ -2,7 +2,8 @@ name: Release Windows app
 
 on:
   push:
-    branches: [release]
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
 
 concurrency:
@@ -12,8 +13,23 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FEED_REPO: ${{ vars.RELEASES_REPO || github.repository }}
+
 jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      v: ${{ steps.v.outputs.v }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          echo "v=$BASE.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: version
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -24,26 +40,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.v }}
       - name: Core tests (ledger, reports, backups, migrations)
-        run: cargo test -p pos-core --locked
+        run: cargo test -p pos-core
       - name: Typecheck and build screens
         run: npm run build
       - name: Browser end to end tests
         run: |
           npx playwright-core install --with-deps chromium
-          cargo build -p pos-dev --release --locked
+          cargo build -p pos-dev --release
           CHROME=$(node -e "console.log(require('playwright-core').chromium.executablePath())") npm run test:e2e
-      - name: Check the version is new
-        env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
-        run: |
-          V=$(node -p "require('./package.json').version")
-          C=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          [ "$V" = "$C" ] || { echo "package.json $V and tauri.conf.json $C differ. Run npm run version:set"; exit 1; }
-          if gh release view "v$V" --repo "$RELEASES_REPO" >/dev/null 2>&1; then
-            echo "v$V is already published. Run: npm run version:set -- <new version>"; exit 1
-          fi
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -51,10 +57,8 @@ jobs:
           path: e2e/.out
 
   build:
-    needs: test
+    needs: [version, test]
     runs-on: windows-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -64,17 +68,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: node scripts/set-version.mjs ${{ needs.version.outputs.v }}
       - name: Core tests on Windows
-        run: cargo test -p pos-core --locked
+        run: cargo test -p pos-core
       - name: Point updates at the release feed
         shell: bash
         env:
-          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
           UPDATER_PUBKEY: ${{ vars.UPDATER_PUBKEY }}
         run: |
           node -e "
           const fs=require('fs');const p='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(p));
-          c.plugins.updater.endpoints=['https://github.com/'+process.env.RELEASES_REPO+'/releases/latest/download/latest.json'];
+          c.plugins.updater.endpoints=['https://github.com/'+process.env.FEED_REPO+'/releases/latest/download/latest.json'];
           if(process.env.UPDATER_PUBKEY) c.plugins.updater.pubkey=process.env.UPDATER_PUBKEY;
           fs.writeFileSync(p,JSON.stringify(c,null,2));"
       - name: Build signed installer
@@ -85,30 +89,49 @@ jobs:
       - name: Collect installer, signature and update feed
         shell: bash
         env:
-          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          V: ${{ needs.version.outputs.v }}
         run: |
-          V=$(node -p "require('./package.json').version")
           D=target/release/bundle/nsis
           EXE=$(ls $D/*_x64-setup.exe | head -1)
-          SIG="$EXE.sig"
-          test -s "$SIG" || { echo "Missing update signature"; exit 1; }
+          test -s "$EXE.sig" || { echo "Missing update signature"; exit 1; }
           mkdir -p out
           cp "$EXE" "out/ShopPOS_${V}_x64-setup.exe"
-          cp "$SIG" "out/ShopPOS_${V}_x64-setup.exe.sig"
+          cp "$EXE.sig" "out/ShopPOS_${V}_x64-setup.exe.sig"
           node -e "
-          const fs=require('fs');const v=process.argv[1];const repo=process.argv[2];
+          const fs=require('fs');const v=process.env.V;const repo=process.env.FEED_REPO;
           const sig=fs.readFileSync('out/ShopPOS_'+v+'_x64-setup.exe.sig','utf8').trim();
           const feed={version:v,notes:'ShopPOS '+v,pub_date:new Date().toISOString(),platforms:{'windows-x86_64':{signature:sig,url:'https://github.com/'+repo+'/releases/download/v'+v+'/ShopPOS_'+v+'_x64-setup.exe'}}};
-          fs.writeFileSync('out/latest.json',JSON.stringify(feed,null,2));" "$V" "$RELEASES_REPO"
+          fs.writeFileSync('out/latest.json',JSON.stringify(feed,null,2));"
           cat out/latest.json
+      - name: Install and start the app on Windows
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem out\*.exe | Select-Object -First 1
+          Start-Process $setup.FullName -ArgumentList '/S' -Wait
+          $app = Join-Path $env:LOCALAPPDATA 'ShopPOS\shoppos.exe'
+          if (-not (Test-Path $app)) { $app = (Get-ChildItem $env:LOCALAPPDATA -Recurse -Filter shoppos.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+          if (-not $app) { throw 'Installed app not found' }
+          $env:SHOPPOS_DATA_DIR = Join-Path $env:RUNNER_TEMP 'shopdata'
+          $env:SHOPPOS_NO_UPDATE = '1'
+          $p = Start-Process $app -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 45; $i++) { Start-Sleep 1; if (Test-Path $env:SHOPPOS_DATA_DIR) { $ok = $true; break }; if ($p.HasExited) { break } }
+          if ($p.HasExited) { throw "App closed by itself, exit code $($p.ExitCode)" }
+          if (-not $ok) { throw 'The app window did not finish starting (no data folder made)' }
+          Start-Sleep 3
+          if ($p.HasExited) { throw 'App closed after starting' }
+          Stop-Process $p
+          Write-Host "App installed to $app and started correctly"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: out/
 
   publish:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -119,14 +142,13 @@ jobs:
         env:
           UPDATER_PUBKEY: ${{ vars.UPDATER_PUBKEY }}
         run: |
-          python3 -m pip install --quiet pynacl
+          python3 -m venv /tmp/sigenv && /tmp/sigenv/bin/pip install --quiet pynacl
           PUB="${UPDATER_PUBKEY:-$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")}"
-          python3 scripts/verify_update_sig.py "$PUB" out/*.exe out/*.exe.sig
+          /tmp/sigenv/bin/python scripts/verify_update_sig.py "$PUB" out/*.exe
       - name: Publish release and update feed
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-          RELEASES_REPO: ${{ vars.RELEASES_REPO }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || secrets.GITHUB_TOKEN }}
+          V: ${{ needs.version.outputs.v }}
         run: |
-          V=$(node -p "require('./package.json').version")
-          gh release create "v$V" out/* --repo "$RELEASES_REPO" --title "ShopPOS $V" --notes "ShopPOS $V" --draft
-          gh release edit "v$V" --repo "$RELEASES_REPO" --draft=false --latest
+          gh release create "v$V" out/* --repo "$FEED_REPO" --title "ShopPOS $V" --notes "ShopPOS $V" --draft
+          gh release edit "v$V" --repo "$FEED_REPO" --draft=false --latest

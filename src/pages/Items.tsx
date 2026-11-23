@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, exportCsv, fileUrl } from "../api";
 import { FieldInput } from "../components/Fields";
-import { date, money } from "../format";
+import { date, money, STATUS } from "../format";
 import { Category, Empty, ErrorBox, FieldDef, Label, go, useApp, useAsync } from "../ui";
 
 type Filter = { key: number; field_id: number | null; op: string; value: any; value2: any };
@@ -37,7 +37,7 @@ export default function ItemsPage(props: { query: URLSearchParams }) {
   const { toast } = useApp();
   const [text, setText] = useState(props.query.get("text") ?? "");
   const [cat, setCat] = useState(props.query.get("category") ?? "");
-  const [status, setStatus] = useState(props.query.get("status") ?? "active");
+  const [status, setStatus] = useState(props.query.get("status") ?? "all");
   const [pFrom, setPFrom] = useState("");
   const [pTo, setPTo] = useState("");
   const [sFrom, setSFrom] = useState("");
@@ -112,12 +112,14 @@ export default function ItemsPage(props: { query: URLSearchParams }) {
           </Label>
           <Label text="Show">
             <select value={status} onChange={(e) => setStatus(e.target.value)} data-testid="items-status">
-              <option value="active">All current items</option>
-              <option value="in_stock">In stock</option>
-              <option value="out_of_stock">Out of stock</option>
-              <option value="low">Low stock</option>
-              <option value="archived">Archived</option>
               <option value="all">Everything</option>
+              <option value="active">All active items</option>
+              <option value="in_stock">In stock</option>
+              <option value="sold">Sold</option>
+              <option value="damaged">Damaged</option>
+              <option value="low">Low stock</option>
+              <option value="out_of_stock">Out of stock</option>
+              <option value="inactive">Inactive</option>
             </select>
           </Label>
           <button className="btn" onClick={() => setMore(!more)} data-testid="more-filters">
@@ -217,8 +219,11 @@ export default function ItemsPage(props: { query: URLSearchParams }) {
                 {data.list_fields.map((f: FieldDef) => (
                   <th key={f.id}>{f.name}</th>
                 ))}
+                <th>Status</th>
                 <th className="num">{data.as_of ? `Stock on ${date(data.as_of)}` : "In stock"}</th>
-                <th className="num">Price</th>
+                <th>Bought</th>
+                <th>Sold</th>
+                <th className="num">Profit / loss</th>
               </tr>
             </thead>
             <tbody>
@@ -228,14 +233,39 @@ export default function ItemsPage(props: { query: URLSearchParams }) {
                   <td>
                     <strong>{r.name}</strong>
                     {r.identifier && <span className="muted"> #{r.identifier}</span>}
-                    {r.archived && <span className="tag">Archived</span>}
+                    
                   </td>
                   <td>{r.category_name}</td>
                   {data.list_fields.map((f: FieldDef) => (
                     <td key={f.id}>{r.fields?.[String(f.id)] ?? ""}</td>
                   ))}
+                  <td>
+                    <span className={`status ${STATUS[r.status]?.cls}`}>{STATUS[r.status]?.label}</span>
+                  </td>
                   <td className={`num ${r.stock > 0 ? "" : "stock-out"}`}>{r.stock}</td>
-                  <td className="num">{r.sale_price !== null ? money(r.sale_price) : ""}</td>
+                  <td className="small nowrap">
+                    {r.money.bought_qty > 0 && (
+                      <>
+                        {date(r.money.last_bought)}
+                        <div className="muted">
+                          {r.money.bought_qty} at {money(r.money.avg_cost)}
+                        </div>
+                      </>
+                    )}
+                  </td>
+                  <td className="small nowrap">
+                    {r.money.sold_qty > 0 && (
+                      <>
+                        {date(r.money.last_sold)}
+                        <div className="muted">
+                          {r.money.sold_qty} for {money(r.money.revenue)}
+                        </div>
+                      </>
+                    )}
+                  </td>
+                  <td className={`num ${r.money.profit > 0 ? "profit" : r.money.profit < 0 ? "loss" : "muted"}`}>
+                    {r.money.sold_qty > 0 || r.money.written_off > 0 ? (r.money.profit < 0 ? `Loss ${money(-r.money.profit)}` : money(r.money.profit)) : ""}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -22,6 +22,7 @@ export default function ReportsPage() {
   const category_id = cat ? Number(cat) : null;
   const fig = useAsync(() => call("report_figures", { from: f, to: t, category_id }), [f, t, cat]);
   const monthly = useAsync(() => (mode === "custom" ? call("report_monthly", { from: f, to: t, category_id }) : Promise.resolve(null)), [mode, f, t, cat]);
+  const me = useAsync(() => call("report_month_end", { from: f, to: t, category_id }), [f, t, cat]);
   const stock = useAsync(() => call("report_stock", { as_of: t, category_id }), [t, cat]);
 
   const drill = (k: keyof typeof DRILL, a = f, b = t) => go("/history", { kinds: DRILL[k].kinds, from: a, to: b, category: cat, title: `${DRILL[k].title} ${date(a)} to ${date(b)}` });
@@ -85,7 +86,9 @@ export default function ReportsPage() {
           </Label>
         </div>
       </div>
-      <ErrorBox text={fig.error} />
+      <ErrorBox text={fig.error || me.error} />
+      {me.data && <MonthEnd r={me.data} />}
+      <h2>All figures</h2>
       {d && (
         <div className="cards">
           <Card label="Bought (pieces)" value={String(d.qty_purchased)} k="purchases" testid="fig-qty-purchased" />
@@ -190,6 +193,108 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MonthEnd(props: { r: any }) {
+  const r = props.r;
+  return (
+    <div className="stack" data-testid="month-end">
+      <h2>
+        Month end: {date(r.from)} to {date(r.to)}
+      </h2>
+      <div className="cards">
+        <div className="card stat">
+          <span>Sold</span>
+          <strong data-testid="me-sold">{r.sold.qty} pcs</strong>
+          <small>for {money(r.sold.net_sales)}</small>
+        </div>
+        <div className="card stat">
+          <span>Not sold (still in stock)</span>
+          <strong data-testid="me-unsold">{r.unsold.qty} pcs</strong>
+          <small>
+            {r.unsold.items} item(s), cost {money(r.unsold.value)}
+          </small>
+        </div>
+        <div className="card stat">
+          <span>Total profit</span>
+          <strong className="profit" data-testid="me-profit">
+            {money(r.total_profit)}
+          </strong>
+        </div>
+        <div className="card stat">
+          <span>Total loss</span>
+          <strong className="loss" data-testid="me-loss">
+            {money(r.total_loss)}
+          </strong>
+        </div>
+        <div className="card stat">
+          <span>Result</span>
+          <strong className={r.net_result >= 0 ? "profit" : "loss"} data-testid="me-net">
+            {r.net_result < 0 ? `Loss ${money(-r.net_result)}` : money(r.net_result)}
+          </strong>
+        </div>
+      </div>
+      <div className="card">
+        <h2>Items that made a loss</h2>
+        {r.loss_items.length === 0 ? (
+          <p className="muted">No loss this period.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="table" data-testid="loss-items">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th className="num">Sold</th>
+                  <th className="num">Sold for</th>
+                  <th className="num">It cost</th>
+                  <th className="num">Written off</th>
+                  <th className="num">Loss</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.loss_items.map((x: any) => (
+                  <tr key={x.id} className="click" onClick={() => go(`/item/${x.id}`)}>
+                    <td>
+                      {x.name}
+                      {x.identifier && <span className="muted"> #{x.identifier}</span>}
+                      <div className="muted small">{x.category_name}</div>
+                    </td>
+                    <td className="num">{x.sold_qty}</td>
+                    <td className="num">{money(x.revenue)}</td>
+                    <td className="num">{money(x.sold_cost)}</td>
+                    <td className="num">{x.written_off ? `${x.written_off_qty} pcs, ${money(x.written_off)}` : ""}</td>
+                    <td className="num loss">{money(-x.profit)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {r.write_offs.length > 0 && (
+          <>
+            <h3>Written off (damaged, lost)</h3>
+            <table className="table">
+              <tbody>
+                {r.write_offs.map((w: any) => (
+                  <tr key={w.txn_id} className={`click ${w.reversed ? "row-muted" : ""}`} onClick={() => go(`/txn/${w.txn_id}`)}>
+                    <td>{date(w.business_date)}</td>
+                    <td>{w.number}</td>
+                    <td>{w.description}</td>
+                    <td className="num">{w.qty} pcs</td>
+                    <td className="num">{money(w.cost)}</td>
+                    <td>
+                      {w.reason}
+                      {w.reversed && " (reversed)"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
     </div>
   );
 }

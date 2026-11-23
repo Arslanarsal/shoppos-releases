@@ -161,3 +161,11 @@ export const FIELD_KINDS: { value: string; label: string; hint: string }[] = [
 export function kindName(k: string): string {
   return FIELD_KINDS.find((x) => x.value === k)?.label ?? k;
 }
+
+export const STATUS: Record<string, { label: string; cls: string }> = {
+  in_stock: { label: "In stock", cls: "st-ok" },
+  sold: { label: "Sold", cls: "st-sold" },
+  out_of_stock: { label: "Out of stock", cls: "st-out" },
+  damaged: { label: "Damaged", cls: "st-bad" },
+  inactive: { label: "Inactive", cls: "st-off" },
+};

@@ -341,6 +341,13 @@ impl Core {
                     settings::set_many(c, &m)
                 });
             }
+            "export_full" => {
+                let dest = PathBuf::from(s(a, "path"));
+                if s(a, "path").trim().is_empty() || !dest.is_dir() {
+                    return user("Choose a drive or folder that exists for the copy");
+                }
+                return self.with_conn(|c| backup::export_copy(c, &self.data_dir, &dest, &self.app_version));
+            }
             "export_csv" => {
                 let text = self.with_conn(|c| export(c, a))?;
                 let path = s(a, "path");
@@ -453,6 +460,11 @@ fn business(c: &mut Connection, cmd: &str, a: &Value) -> Result<Value> {
             item_get(c, id)?
         }
         "item_get" => item_get(c, id_of(a)?)?,
+        "item_set_condition" => {
+            catalog::item_set_condition(c, id_of(a)?, s(a, "condition"))?;
+            json!(true)
+        }
+        "report_month_end" => reports::month_end(c, &arg(a)?)?,
         "item_archive" => {
             catalog::item_archive(c, id_of(a)?, flag(a, "archived"))?;
             json!(true)
@@ -497,7 +509,8 @@ fn item_get(c: &Connection, id: i64) -> Result<Value> {
     let values = catalog::item_values(c, id)?;
     let photos = catalog::item_photos(c, id, false)?;
     let (qty, value) = stock::stock_on(c, id, None)?;
-    Ok(json!({ "item": item, "fields": fields, "values": values, "photos": photos, "stock": { "qty": qty, "value": value } }))
+    let money = reports::item_money(c, id)?;
+    Ok(json!({ "item": item, "fields": fields, "values": values, "photos": photos, "stock": { "qty": qty, "value": value }, "money": money }))
 }
 
 fn detect_image(b: &[u8]) -> Option<&'static str> {

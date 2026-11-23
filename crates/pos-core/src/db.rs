@@ -13,6 +13,7 @@ pub struct Migration {
 pub const MIGRATIONS: &[Migration] = &[
     Migration { version: 1, name: "initial", sql: include_str!("../migrations/0001_initial.sql") },
     Migration { version: 2, name: "reorder level", sql: include_str!("../migrations/0002_reorder_level.sql") },
+    Migration { version: 3, name: "item condition", sql: include_str!("../migrations/0003_item_condition.sql") },
 ];
 
 pub fn latest_version() -> i64 {

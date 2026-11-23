@@ -649,7 +649,7 @@ fn has_value(conn: &Connection, item_id: i64, field_id: i64) -> Result<bool> {
 
 pub fn item_row(conn: &Connection, id: i64) -> Result<Value> {
     conn.query_row(
-        "SELECT i.id, i.category_id, c.name, i.name, i.identifier, i.tracking, i.sale_price, i.reorder_level, i.notes, i.created_at, i.updated_at, i.archived_at, c.archived_at IS NOT NULL
+        "SELECT i.id, i.category_id, c.name, i.name, i.identifier, i.tracking, i.sale_price, i.reorder_level, i.notes, i.created_at, i.updated_at, i.archived_at, c.archived_at IS NOT NULL, i.condition
          FROM items i JOIN categories c ON c.id=i.category_id WHERE i.id=?1",
         [id],
         |r| {
@@ -658,7 +658,8 @@ pub fn item_row(conn: &Connection, id: i64) -> Result<Value> {
                 "name": r.get::<_, String>(3)?, "identifier": r.get::<_, String>(4)?, "tracking": r.get::<_, String>(5)?,
                 "sale_price": r.get::<_, Option<i64>>(6)?, "reorder_level": r.get::<_, Option<i64>>(7)?, "notes": r.get::<_, String>(8)?,
                 "created_at": r.get::<_, String>(9)?, "updated_at": r.get::<_, String>(10)?,
-                "archived": r.get::<_, Option<String>>(11)?.is_some(), "category_archived": r.get::<_, bool>(12)?
+                "archived": r.get::<_, Option<String>>(11)?.is_some(), "category_archived": r.get::<_, bool>(12)?,
+                "condition": r.get::<_, String>(13)?
             }))
         },
     )
@@ -709,6 +710,19 @@ pub fn item_fields(conn: &Connection, item_id: i64, category_id: i64) -> Result<
     let vals = item_values(conn, item_id)?;
     fields.retain(|f| !f.archived || vals.contains_key(&f.id.to_string()));
     Ok(fields)
+}
+
+pub fn item_set_condition(conn: &Connection, id: i64, condition: &str) -> Result<()> {
+    if condition != "good" && condition != "damaged" {
+        return user("Condition must be good or damaged");
+    }
+    let before = item_row(conn, id)?;
+    if before["condition"] == condition {
+        return Ok(());
+    }
+    conn.execute("UPDATE items SET condition=?1, updated_at=?2 WHERE id=?3", params![condition, now_iso(), id])?;
+    audit(conn, "item", Some(id), if condition == "damaged" { "mark_damaged" } else { "mark_good" }, &json!({ "from": before["condition"], "to": condition }))?;
+    Ok(())
 }
 
 pub fn item_archive(conn: &Connection, id: i64, archived: bool) -> Result<()> {

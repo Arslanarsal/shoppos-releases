@@ -121,7 +121,9 @@ pub fn item_search(conn: &Connection, q: &ItemSearch) -> Result<Value> {
     }
     match q.status.as_str() {
         "all" => {}
-        "archived" => wh.push("i.archived_at IS NOT NULL".into()),
+        "archived" | "inactive" => wh.push("i.archived_at IS NOT NULL".into()),
+        "damaged" => wh.push("i.archived_at IS NULL AND i.condition = 'damaged'".into()),
+        "sold" => wh.push("i.archived_at IS NULL AND COALESCE(s.q,0) <= 0 AND COALESCE(f.sold_qty,0) > 0".into()),
         "in_stock" => wh.push("i.archived_at IS NULL AND COALESCE(s.q,0) > 0".into()),
         "out_of_stock" => wh.push("i.archived_at IS NULL AND COALESCE(s.q,0) <= 0".into()),
         "low" => wh.push("i.archived_at IS NULL AND i.reorder_level IS NOT NULL AND COALESCE(s.q,0) <= i.reorder_level".into()),
@@ -144,8 +146,9 @@ pub fn item_search(conn: &Connection, q: &ItemSearch) -> Result<Value> {
     }
     let where_sql = if wh.is_empty() { "1".to_string() } else { wh.join(" AND ") };
     let from_sql = format!(
-        "WITH s AS (SELECT item_id, SUM(qty) q, SUM(cost) c FROM stock_moves WHERE business_date <= ? GROUP BY item_id)
-         SELECT {{cols}} FROM items i JOIN categories c ON c.id=i.category_id LEFT JOIN s ON s.item_id=i.id WHERE {where_sql}"
+        "WITH s AS (SELECT item_id, SUM(qty) q, SUM(cost) c FROM stock_moves WHERE business_date <= ? GROUP BY item_id), {}
+         SELECT {{cols}} FROM items i JOIN categories c ON c.id=i.category_id LEFT JOIN s ON s.item_id=i.id LEFT JOIN fin f ON f.item_id=i.id WHERE {where_sql}",
+        crate::reports::item_fin_cte(false)
     );
     let total: i64 = conn.query_row(&from_sql.replace("{cols}", "COUNT(*)"), params_from_iter(args.iter()), |r| r.get(0))?;
     let limit = q.limit.unwrap_or(100).clamp(1, 100_000);
@@ -154,8 +157,12 @@ pub fn item_search(conn: &Connection, q: &ItemSearch) -> Result<Value> {
         "{} ORDER BY i.name COLLATE NOCASE, i.id LIMIT {limit} OFFSET {offset}",
         from_sql.replace(
             "{cols}",
-            "i.id, i.name, i.identifier, i.tracking, i.category_id, c.name, COALESCE(s.q,0), COALESCE(s.c,0), i.archived_at IS NOT NULL, i.sale_price, i.reorder_level,
-             (SELECT file FROM photos p WHERE p.item_id=i.id AND p.archived_at IS NULL ORDER BY p.sort_order, p.id LIMIT 1)"
+            &format!(
+                "i.id, i.name, i.identifier, i.tracking, i.category_id, c.name, COALESCE(s.q,0), COALESCE(s.c,0), i.archived_at IS NOT NULL, i.sale_price, i.reorder_level,
+                 (SELECT file FROM photos p WHERE p.item_id=i.id AND p.archived_at IS NULL ORDER BY p.sort_order, p.id LIMIT 1), {}, {}, i.condition",
+                crate::reports::FIN_COLS,
+                crate::reports::STATUS_SQL
+            )
         )
     );
     let mut stmt = conn.prepare(&sql)?;
@@ -165,7 +172,8 @@ pub fn item_search(conn: &Connection, q: &ItemSearch) -> Result<Value> {
                 "id": r.get::<_, i64>(0)?, "name": r.get::<_, String>(1)?, "identifier": r.get::<_, String>(2)?,
                 "tracking": r.get::<_, String>(3)?, "category_id": r.get::<_, i64>(4)?, "category_name": r.get::<_, String>(5)?,
                 "stock": r.get::<_, i64>(6)?, "stock_value": r.get::<_, i64>(7)?, "archived": r.get::<_, bool>(8)?,
-                "sale_price": r.get::<_, Option<i64>>(9)?, "reorder_level": r.get::<_, Option<i64>>(10)?, "photo": r.get::<_, Option<String>>(11)?
+                "sale_price": r.get::<_, Option<i64>>(9)?, "reorder_level": r.get::<_, Option<i64>>(10)?, "photo": r.get::<_, Option<String>>(11)?,
+                "money": crate::reports::fin_json(r, 12)?, "status": r.get::<_, String>(22)?, "condition": r.get::<_, String>(23)?
             }))
         })?
         .collect::<std::result::Result<_, _>>()?;

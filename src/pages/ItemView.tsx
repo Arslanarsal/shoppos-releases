@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { call, fileUrl, newToken } from "../api";
 import { displayValue } from "../components/Fields";
-import { date, dateTime, kindLabel, money, parseMoney, todayIso } from "../format";
+import { date, dateTime, kindLabel, money, parseMoney, STATUS, todayIso } from "../format";
 import { Empty, ErrorBox, FieldDef, Label, Modal, Tabs, go, useApp, useAsync } from "../ui";
 import { LinesTable } from "./History";
 
@@ -13,7 +13,7 @@ export default function ItemView(props: { id: number }) {
   const [big, setBig] = useState<string | null>(null);
   const [asOf, setAsOf] = useState(todayIso());
   const [asOfQty, setAsOfQty] = useState<any>(null);
-  const [adjust, setAdjust] = useState(false);
+  const [adjust, setAdjust] = useState<null | "count" | "damaged">(null);
 
   if (error) return <div className="page"><ErrorBox text={error} /></div>;
   if (!data) return <div className="page">Loading...</div>;
@@ -31,9 +31,16 @@ export default function ItemView(props: { id: number }) {
   const checkDate = async () => setAsOfQty(await call("item_stock_on", { id: props.id, date: asOf }));
   const archive = async () => {
     await call("item_archive", { id: props.id, archived: !it.archived });
-    toast(it.archived ? "Item brought back" : "Item archived. Its history is kept and still searchable.");
+    toast(it.archived ? "Item is active again" : "Item made inactive. Its history is kept and still searchable.");
     reload();
   };
+  const setCondition = async (condition: string) => {
+    await call("item_set_condition", { id: props.id, condition });
+    toast(condition === "damaged" ? "Marked as damaged" : "Marked as good");
+    reload();
+  };
+  const m = data.money;
+  const st = STATUS[m.status];
 
   return (
     <div className="page">
@@ -41,7 +48,10 @@ export default function ItemView(props: { id: number }) {
         <div>
           <div className="muted">{it.category_name}</div>
           <h1>
-            {it.name} {it.archived && <span className="tag">Archived</span>}
+            {it.name}{" "}
+            <span className={`status ${st?.cls}`} data-testid="item-status">
+              {st?.label}
+            </span>
           </h1>
           {it.identifier && <div className="ident">#{it.identifier}</div>}
         </div>
@@ -60,12 +70,20 @@ export default function ItemView(props: { id: number }) {
             Edit
           </button>
           {!it.archived && (
-            <button className="btn" onClick={() => setAdjust(true)}>
+            <button className="btn" onClick={() => setAdjust("count")}>
               Correct stock
             </button>
           )}
+          {!it.archived && data.stock.qty > 0 && (
+            <button className="btn" onClick={() => setAdjust("damaged")} data-testid="write-off">
+              Write off damaged
+            </button>
+          )}
+          <button className="btn" onClick={() => setCondition(it.condition === "damaged" ? "good" : "damaged")} data-testid="toggle-damaged">
+            {it.condition === "damaged" ? "Mark as good" : "Mark damaged"}
+          </button>
           <button className="btn btn-ghost" onClick={archive}>
-            {it.archived ? "Bring back" : "Archive"}
+            {it.archived ? "Make active" : "Make inactive"}
           </button>
         </div>
       </div>
@@ -93,6 +111,36 @@ export default function ItemView(props: { id: number }) {
                 <strong>{money(it.sale_price)}</strong>
               </div>
             )}
+          </div>
+          <div className="money-grid" data-testid="item-money">
+            <div>
+              <span>Bought</span>
+              <strong>{m.bought_qty > 0 ? `${m.bought_qty} for ${money(m.bought_cost)}` : "-"}</strong>
+              {m.first_bought && <small className="muted">{m.first_bought === m.last_bought ? date(m.first_bought) : `${date(m.first_bought)} to ${date(m.last_bought)}`}</small>}
+            </div>
+            <div>
+              <span>Sold</span>
+              <strong>{m.sold_qty > 0 ? `${m.sold_qty} for ${money(m.revenue)}` : "-"}</strong>
+              {m.last_sold && (
+                <small className="muted">
+                  last {date(m.last_sold)} at {money(m.last_sale_price)}
+                </small>
+              )}
+            </div>
+            {m.written_off > 0 && (
+              <div>
+                <span>Written off</span>
+                <strong className="loss">
+                  {m.written_off_qty} pcs, {money(m.written_off)}
+                </strong>
+              </div>
+            )}
+            <div>
+              <span>{m.profit < 0 ? "Loss" : "Profit"}</span>
+              <strong className={m.profit > 0 ? "profit" : m.profit < 0 ? "loss" : ""} data-testid="item-profit">
+                {money(Math.abs(m.profit))}
+              </strong>
+            </div>
           </div>
           <div className="row">
             <Label text="Stock on a date">
@@ -146,7 +194,7 @@ export default function ItemView(props: { id: number }) {
           <img className="photo-big" src={fileUrl(big)} alt="" />
         </Modal>
       )}
-      {adjust && <AdjustStock item={it} stock={data.stock.qty} onClose={() => setAdjust(false)} onDone={reload} />}
+      {adjust && <AdjustStock item={it} stock={data.stock.qty} damaged={adjust === "damaged"} onClose={() => setAdjust(null)} onDone={reload} />}
     </div>
   );
 }
@@ -218,11 +266,11 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
-function AdjustStock(props: { item: any; stock: number; onClose: () => void; onDone: () => void }) {
+function AdjustStock(props: { item: any; stock: number; damaged?: boolean; onClose: () => void; onDone: () => void }) {
   const { toast } = useApp();
-  const [counted, setCounted] = useState(String(props.stock));
+  const [counted, setCounted] = useState(String(props.damaged ? Math.max(props.stock - 1, 0) : props.stock));
   const [cost, setCost] = useState("");
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(props.damaged ? "Damaged" : "");
   const [day, setDay] = useState(todayIso());
   const [error, setError] = useState("");
   const [token] = useState(newToken());
@@ -247,7 +295,7 @@ function AdjustStock(props: { item: any; stock: number; onClose: () => void; onD
   };
   return (
     <Modal
-      title={`Correct stock of ${props.item.name}`}
+      title={props.damaged ? `Write off damaged ${props.item.name}` : `Correct stock of ${props.item.name}`}
       onClose={props.onClose}
       footer={
         <>
@@ -262,10 +310,13 @@ function AdjustStock(props: { item: any; stock: number; onClose: () => void; onD
     >
       <div className="stack">
         <p>
-          The app thinks you have <strong>{props.stock}</strong>. Use this only when the real count is different (lost, damaged, found). For sales and purchases use the normal screens.
+          {props.damaged
+            ? "Pieces you can no longer sell are taken out of stock and counted as a loss in the month-end report. The record stays forever."
+            : "Use this only when the real count is different (lost, damaged, found). For sales and purchases use the normal screens."}{" "}
+          The app thinks you have <strong>{props.stock}</strong>.
         </p>
         <div className="row">
-          <Label text="Pieces you really have">
+          <Label text={props.damaged ? "Good pieces left after the write off" : "Pieces you really have"}>
             <input value={counted} onChange={(e) => setCounted(e.target.value)} inputMode="numeric" style={{ width: 120 }} />
           </Label>
           <Label text="Date">

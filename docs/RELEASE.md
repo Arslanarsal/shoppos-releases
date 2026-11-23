@@ -30,12 +30,11 @@ To try the screens in a browser: `SHOPPOS_DATA_DIR=/tmp/shop npm run devserver` 
 
 ## Shipping a change to the shop
 
-1. `npm run version:set -- 0.2.0` (every release needs a higher version).
-2. Commit, then push to the `release` branch: `git push origin main:release`.
-3. GitHub Actions runs the tests on Linux, runs the core tests again and builds the signed installer on a Windows runner, checks the signature, then publishes `ShopPOS_<version>_x64-setup.exe`, its `.sig` and `latest.json` to the releases repository.
-4. Next time the owner closes and opens the app, it downloads the new version, checks its signature, installs it and opens again. If the signature is wrong, the update is refused and the current version opens.
+1. Commit and `git push` to `main`. That is all.
+2. GitHub Actions gives the build a new version number by itself (`0.1.<run number>`), runs all tests on Linux, runs the core tests again and builds the signed installer on Windows, installs it there and checks that the app starts, verifies the update signature, then publishes `ShopPOS_<version>_x64-setup.exe`, its `.sig` and `latest.json` as a GitHub release in this repository.
+3. Next time the owner closes and opens the app, it downloads the new version, checks its signature, installs it and opens again. If anything is wrong with the update, it is refused and the current version opens. The owner's data folder is never touched by an update.
 
-Nothing is published if any test fails.
+Nothing is published if any test fails. Pushes that only change `.md` files or `docs/` do not make a release. To change the first two parts of the version (for example 0.2.x), run `npm run version:set -- 0.2.0` and push.
 
 ## Changing the database
 
@@ -51,10 +50,9 @@ Business tables cannot be deleted or edited at the database level (triggers). Co
 
 ## One-time setup
 
-### 1. Repositories
+### 1. Repository
 
-- Source code: your private repository (for example `Arslanarsal/shoppos`).
-- Update feed: a **public** repository that only holds the installers, for example `Arslanarsal/shoppos-releases`. Create it empty with a README. It must be public so the shop computer can download updates without any login. It holds no source code and no customer data.
+The repository `Arslanarsal/shoppos-releases` holds the code and also the published installers (GitHub Releases). It is public, so the shop computer downloads updates without any login. No customer data and no keys are in it. To keep the code private instead, make it private, create a separate public repository for releases, set the variable `RELEASES_REPO` to it and add `RELEASES_TOKEN` (a token with Contents write on that repository).
 
 ### 2. Signing key
 
@@ -68,19 +66,16 @@ Keep a copy of the private key and password somewhere safe offline (a password m
 
 To make a new key: `npx tauri signer generate -w ~/.tauri/shoppos.key`, then put the new public key in `tauri.conf.json` (and the variable below).
 
-### 3. GitHub settings on the source repository
+### 3. GitHub settings (one time)
 
-Settings, Secrets and variables, Actions:
+Repository Settings, Secrets and variables, Actions, New repository secret:
 
-| Kind | Name | Value |
-| --- | --- | --- |
-| Secret | `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/shoppos.key` |
-| Secret | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | contents of `~/.tauri/shoppos.key.password` |
-| Secret | `RELEASES_TOKEN` | a fine grained token with Contents read and write on the releases repository only |
-| Variable | `RELEASES_REPO` | `Arslanarsal/shoppos-releases` |
-| Variable | `UPDATER_PUBKEY` | contents of `~/.tauri/shoppos.key.pub` (optional, overrides the one in tauri.conf.json) |
+| Name | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | contents of `~/.tauri/shoppos.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | contents of `~/.tauri/shoppos.key.password` |
 
-Create the `release` branch once: `git push origin main:release`.
+Repository Settings, Actions, General, Workflow permissions: choose **Read and write permissions** (lets the workflow publish releases with its built in token).
 
 ### 4. Optional: Windows code signing
 
@@ -98,6 +93,10 @@ npx tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc
 ```
 
 Output: `target/x86_64-pc-windows-msvc/release/bundle/nsis/`.
+
+## Windows 10
+
+The app uses Microsoft WebView2, which Windows 10 (version 1803 and newer) gets through Windows Update. If a computer does not have it, the installer installs it (an internet connection is needed for that first install only). After that the app works offline.
 
 ## Testing updates by hand on Windows
 

@@ -53,6 +53,24 @@ export default function SettingsPage(props: { tab: string }) {
     }
   };
 
+  const [exportPath, setExportPath] = useState("");
+  const exportCopy = async (path: string) => {
+    setError("");
+    setBusy("Copying all records, photos and settings, then checking the copy...");
+    try {
+      const r = await call("export_full", { path });
+      toast(`Full copy saved and checked in ${r.path}`);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy("");
+    }
+  };
+  const chooseExport = async () => {
+    const p = await pickFolder("Choose where to save a full copy");
+    if (p) exportCopy(p);
+  };
+
   const chooseDrive = async () => {
     const p = await pickFolder("Choose your backup drive or folder");
     if (p) {
@@ -265,6 +283,27 @@ export default function SettingsPage(props: { tab: string }) {
             <button className="btn" onClick={() => setRestore(true)}>
               Restore from a backup...
             </button>
+          </div>
+          <h3>Export or move your data</h3>
+          <p>
+            Your shop data always stays on this computer. If you want a copy somewhere else (another drive, a new computer), save a full copy. Open ShopPOS on the other computer and choose
+            Restore from backup to use it there. Nothing is moved or removed from this computer.
+          </p>
+          <div className="row">
+            {isTauri ? (
+              <button className="btn" onClick={chooseExport} disabled={!!busy} data-testid="export-full">
+                Export a full copy...
+              </button>
+            ) : (
+              <>
+                <Label text="Folder for the copy">
+                  <input value={exportPath} onChange={(e) => setExportPath(e.target.value)} data-testid="export-path" />
+                </Label>
+                <button className="btn" onClick={() => exportCopy(exportPath)} disabled={!!busy || !exportPath} data-testid="export-full">
+                  Export a full copy
+                </button>
+              </>
+            )}
           </div>
           <p className="muted small">Shop data on this computer: {appInfo?.data_dir}</p>
         </div>

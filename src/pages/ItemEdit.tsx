@@ -144,7 +144,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
                 className="btn btn-small"
                 onClick={() => (p.id ? setRemoved((r) => [...r, p.id!]) : setAdded((a) => a.filter((x) => x !== p)))}
               >
-                Remove
+                Hide
               </button>
             </div>
           ))}
