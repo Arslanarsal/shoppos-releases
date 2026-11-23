@@ -155,6 +155,9 @@ pub fn detail_names(conn: &Connection) -> Result<Value> {
 }
 
 fn insert_txn_photos(tx: &Connection, txn_id: i64, photos: &[crate::catalog::PhotoRef]) -> Result<()> {
+    if photos.is_empty() {
+        return Ok(());
+    }
     let now = chrono::Utc::now().to_rfc3339();
     let start: i64 = tx.query_row("SELECT COUNT(*) FROM txn_photos WHERE txn_id=?1", [txn_id], |r| r.get(0))?;
     for (i, p) in photos.iter().enumerate() {
@@ -207,6 +210,10 @@ fn describe(conn: &Connection, item_id: i64) -> Result<(String, Value)> {
                 details.push(json!({ "name": d.name, "value": s }));
             }
         }
+    }
+    let notes = it["notes"].as_str().unwrap_or("").trim();
+    if !notes.is_empty() {
+        details.push(json!({ "name": "Notes", "value": notes }));
     }
     Ok((desc, Value::Array(details)))
 }

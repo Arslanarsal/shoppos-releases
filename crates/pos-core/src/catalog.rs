@@ -116,10 +116,14 @@ pub struct FieldDef {
     pub sort_order: i64,
     #[serde(default)]
     pub show_in_list: bool,
-    #[serde(default)]
+    #[serde(default = "yes")]
     pub show_on_receipt: bool,
     #[serde(default)]
     pub archived: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 const FIELD_COLS: &str = "id, category_id, item_id, name, kind, unit, options, required, group_name, sort_order, show_in_list, show_on_receipt, archived_at IS NOT NULL";

@@ -1,3 +1,4 @@
+import { showPhotos } from "../components/PhotoViewer";
 import { useState } from "react";
 import { call, fileUrl, newToken } from "../api";
 import { displayValue } from "../components/Fields";
@@ -10,7 +11,6 @@ export default function ItemView(props: { id: number }) {
   const { data, error, reload } = useAsync(() => call("item_get", { id: props.id }), [props.id]);
   const hist = useAsync(() => call("item_history", { id: props.id }), [props.id, data]);
   const [tab, setTab] = useState("purchases");
-  const [big, setBig] = useState<string | null>(null);
   const [asOf, setAsOf] = useState(todayIso());
   const [asOfQty, setAsOfQty] = useState<any>(null);
   const [adjust, setAdjust] = useState<null | "count" | "damaged">(null);
@@ -91,8 +91,14 @@ export default function ItemView(props: { id: number }) {
       <div className="item-top">
         <div className="gallery">
           {data.photos.length === 0 && <div className="photo-none">No photo</div>}
-          {data.photos.map((p: any) => (
-            <img key={p.id} src={fileUrl(p.file)} alt={p.original_name} onClick={() => setBig(p.file)} data-testid="item-photo" />
+          {data.photos.map((p: any, k: number) => (
+            <img
+              key={p.id}
+              src={fileUrl(p.file)}
+              alt={p.original_name}
+              onClick={() => showPhotos(data.photos.map((x: any) => ({ url: fileUrl(x.file), name: `${it.name} - ${x.original_name}` })), k)}
+              data-testid="item-photo"
+            />
           ))}
         </div>
         <div className="card stack">
@@ -189,11 +195,6 @@ export default function ItemView(props: { id: number }) {
       {hist.data && tab === "sales" && <LinesTable data={hist.data.sales} />}
       {hist.data && tab === "moves" && <MovesTable rows={hist.data.moves} />}
       {hist.data && tab === "edits" && <EditsTable rows={hist.data.edits} fields={fields} />}
-      {big && (
-        <Modal title={it.name} onClose={() => setBig(null)} wide>
-          <img className="photo-big" src={fileUrl(big)} alt="" />
-        </Modal>
-      )}
       {adjust && <AdjustStock item={it} stock={data.stock.qty} damaged={adjust === "damaged"} onClose={() => setAdjust(null)} onDone={reload} />}
     </div>
   );

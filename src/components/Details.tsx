@@ -13,7 +13,7 @@ export function DetailRows(props: { rows: Detail[]; onChange: (rows: Detail[]) =
       .catch(() => {});
   }, []);
   const set = (i: number, p: Partial<Detail>) => props.onChange(props.rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
-  const add = (name = "") => props.onChange([...props.rows, { name, value: "", print: false }]);
+  const add = (name = "") => props.onChange([...props.rows, { name, value: "", print: true }]);
   const unused = names.filter((n) => !props.rows.some((r) => r.name.toLowerCase() === n.toLowerCase())).slice(0, 8);
   const id = props.testid ?? "detail";
   return (

@@ -91,7 +91,7 @@ export function FieldEditor(props: {
   const [group, setGroup] = useState(init?.group_name ?? "");
   const [required, setRequired] = useState(init?.required ?? false);
   const [inList, setInList] = useState(init?.show_in_list ?? false);
-  const [onReceipt, setOnReceipt] = useState(init?.show_on_receipt ?? false);
+  const [onReceipt, setOnReceipt] = useState(init?.show_on_receipt ?? true);
   const [scope, setScope] = useState<"category" | "item">(props.allowCategoryScope === false ? "item" : "category");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

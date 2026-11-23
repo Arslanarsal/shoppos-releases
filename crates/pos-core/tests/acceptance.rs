@@ -619,3 +619,33 @@ fn sale_details_any_number_some_printed() {
     let db = rusqlite::Connection::open(dir.path().join("shop.db")).unwrap();
     assert!(db.execute("DELETE FROM txn_details", []).is_err());
 }
+
+#[test]
+fn old_receipts_open_the_same_after_every_upgrade() {
+    let t = tempfile::tempdir().unwrap();
+    let today = Core::new(t.path(), "0.1.7");
+    today.open();
+    ok(&today, "shop_create", json!({ "shop_name": "Old Shop", "currency_symbol": "Rs" }));
+    let (_, desk) = setup_desks(&today);
+    ok(&today, "purchase_post", json!({ "client_token": tok(), "business_date": "2020-01-05", "party": "Ali Traders", "lines": [{ "item_id": desk, "qty": 5, "unit_price": 800000 }] }));
+    let p = ok(&today, "photo_store", json!({ "name": "cnic.jpg", "data": b64(&jpeg(4)) }));
+    let sale = ok(&today, "sale_post", json!({ "client_token": tok(), "business_date": "2020-02-01", "party": "Bilal", "discount": 100000, "photos": [p],
+        "details": [{ "name": "Phone", "value": "0300-1234567", "print": true }], "lines": [{ "item_id": desk, "qty": 2, "unit_price": 1200000 }] }));
+    let id = sale["id"].as_i64().unwrap();
+    today.close();
+    drop(today);
+    let mut future_steps: Vec<Migration> = MIGRATIONS.to_vec();
+    future_steps.push(Migration { version: pos_core::db::latest_version() + 1, name: "a future update", sql: "CREATE TABLE future_feature(id INTEGER PRIMARY KEY); ALTER TABLE items ADD COLUMN future_col TEXT;" });
+    let later = Core::with_migrations(t.path(), "9.9.9", future_steps);
+    assert_eq!(later.open()["state"], "ready");
+    ok(&later, "settings_set", json!({ "shop_name": "New Name", "currency_symbol": "PKR" }));
+    let again = ok(&later, "txn_get", json!({ "id": id }));
+    for k in ["number", "business_date", "party", "subtotal", "discount", "total", "lines", "snapshot", "photos", "info"] {
+        assert_eq!(again[k], sale[k], "{k} changed after the update");
+    }
+    assert_eq!(again["snapshot"]["shop_name"], "Old Shop", "receipt keeps the shop name it was printed with");
+    let p2 = ok(&later, "photo_store", json!({ "name": "bill.jpg", "data": b64(&jpeg(9)) }));
+    let added = ok(&later, "txn_add", json!({ "txn_id": id, "photos": [p2], "note": "Scanned the old paper bill" }));
+    assert_eq!(added["photos"].as_array().unwrap().len(), 2);
+    assert_eq!(added["total"], sale["total"]);
+}

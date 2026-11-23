@@ -1,3 +1,4 @@
+import { showPhotos } from "../components/PhotoViewer";
 import { useRef, useState } from "react";
 import { call, fileUrl, newToken, uploadImage } from "../api";
 import { Detail, DetailRows } from "../components/Details";
@@ -250,10 +251,13 @@ function AddToRecord(props: { t: any; onDone: () => void }) {
       </div>
       {t.photos?.length > 0 ? (
         <div className="txn-photos" data-testid="txn-photos">
-          {t.photos.map((p: any) => (
-            <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
-              <img src={fileUrl(p.file)} alt={p.original_name} />
-            </a>
+          {t.photos.map((p: any, k: number) => (
+            <img
+              key={p.id}
+              src={fileUrl(p.file)}
+              alt={p.original_name}
+              onClick={() => showPhotos(t.photos.map((x: any) => ({ url: fileUrl(x.file), name: `${t.number} - ${x.original_name}` })), k)}
+            />
           ))}
         </div>
       ) : (

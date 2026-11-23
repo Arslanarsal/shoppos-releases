@@ -1,5 +1,6 @@
 import { DeveloperCard } from "./components/Developer";
 import Icon from "./components/Icon";
+import { PhotoHost } from "./components/PhotoViewer";
 import { useCallback, useEffect, useState } from "react";
 import { call, fileUrl, isTauri, runUpdate } from "./api";
 import { ago, setFormat, Settings } from "./format";
@@ -182,6 +183,7 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
         </main>
       </div>
       {view}
+      <PhotoHost />
     </AppCtx.Provider>
   );
 }

@@ -1,3 +1,4 @@
+import { showPhotos } from "../components/PhotoViewer";
 import { useEffect, useRef, useState } from "react";
 import { call, fileUrl, newToken, uploadImage } from "../api";
 import { Detail, DetailRows } from "../components/Details";
@@ -173,7 +174,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
             <div className="row trade-photos">
               {photos.map((p, i) => (
                 <div key={p.file + i} className="trade-photo">
-                  <img src={fileUrl(p.file)} alt={p.original_name} />
+                  <img src={fileUrl(p.file)} alt={p.original_name} onClick={() => showPhotos(photos.map((x) => ({ url: fileUrl(x.file), name: x.original_name })), i)} />
                   <button type="button" className="trade-photo-x" onClick={() => setPhotos((x) => x.filter((_, j) => j !== i))} aria-label="Take off this photo">
                     ✕
                   </button>
@@ -377,7 +378,9 @@ function LineInfo(props: { info: any; cost: any; amount: number | null; qty: num
   const lots: any[] = props.cost?.lots ?? [];
   return (
     <div className="line-info" data-testid="line-info">
-      {r.photos[0] && <img src={fileUrl(r.photos[0].file)} alt="" />}
+      {r.photos[0] && (
+        <img src={fileUrl(r.photos[0].file)} alt="" onClick={() => showPhotos(r.photos.map((x: any) => ({ url: fileUrl(x.file), name: `${r.item.name} - ${x.original_name}` })), 0)} />
+      )}
       <div className="line-info-body">
         <div className="chips">
           {r.item.identifier && (
@@ -471,10 +474,13 @@ function LotSource(props: { lot: any }) {
       )}
       {src.photos?.length > 0 && (
         <div className="lot-photos">
-          {src.photos.map((p: any) => (
-            <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
-              <img src={fileUrl(p.file)} alt={p.original_name} />
-            </a>
+          {src.photos.map((p: any, k: number) => (
+            <img
+              key={p.id}
+              src={fileUrl(p.file)}
+              alt={p.original_name}
+              onClick={() => showPhotos(src.photos.map((x: any) => ({ url: fileUrl(x.file), name: `${src.number} - ${x.original_name}` })), k)}
+            />
           ))}
         </div>
       )}
