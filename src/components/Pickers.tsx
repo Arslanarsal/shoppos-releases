@@ -103,7 +103,7 @@ export function Receipt(props: { txn: any }) {
         {Array.isArray(s.contacts) &&
           s.contacts.map((c: any, i: number) => (
             <div key={i} className="r-contact" data-testid="r-contact">
-              {[c.name, c.title && `(${c.title})`].filter(Boolean).join(" ")}
+              {[c.name, c.title].filter(Boolean).join(" ")}
               {(c.name || c.title) && c.phone ? ": " : ""}
               {c.phone}
             </div>

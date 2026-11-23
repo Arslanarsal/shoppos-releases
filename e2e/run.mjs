@@ -147,19 +147,17 @@ async function main() {
     check(await photoLoaded(page, '[data-testid="logo-preview"]'), "logo uploaded and shown");
     check(await photoLoaded(page, ".brand img"), "logo shown in the app sidebar");
     await page.click('[data-testid="contact-add"]');
-    await page.fill('[data-testid="contact-name-0"]', "Ali Raza");
-    await page.fill('[data-testid="contact-title-0"]', "CEO");
+    await page.fill('[data-testid="contact-name-0"]', "Ali Raza Owner");
     await page.fill('[data-testid="contact-phone-0"]', "0300-1111111");
     await page.click('[data-testid="contact-add"]');
-    await page.fill('[data-testid="contact-name-1"]', "Usman");
-    await page.fill('[data-testid="contact-title-1"]', "Sales Manager");
+    await page.fill('[data-testid="contact-name-1"]', "Usman Sales Manager");
     await page.fill('[data-testid="contact-phone-1"]', "0321-2222222");
     await page.click('[data-testid="contact-add"]');
-    await page.fill('[data-testid="contact-title-2"]', "Workshop");
+    await page.fill('[data-testid="contact-name-2"]', "Workshop");
     await page.fill('[data-testid="contact-phone-2"]', "042-3333333");
     await page.click('[data-testid="settings-save"]');
     await page.locator(".toast", { hasText: "Settings saved" }).waitFor();
-    check((await api(portA, "settings_get", {})).data.contacts.length === 3, "3 contact numbers with names and titles saved in settings");
+    check((await api(portA, "settings_get", {})).data.contacts.length === 3, "3 contact numbers saved in settings, one name box and one number box each");
 
     step = "A categories";
     await page.goto(base + "#/categories");
@@ -311,7 +309,7 @@ async function main() {
     await page.locator('[data-testid="receipt"]').waitFor();
     const rtext = await page.textContent('[data-testid="receipt"]');
     check(rtext.includes("Arslan Furniture and Bikes") && rtext.includes("Rs 36,000") && rtext.includes("Bilal"), "branded receipt with total");
-    check(rtext.includes("Ali Raza (CEO): 0300-1111111") && rtext.includes("Usman (Sales Manager): 0321-2222222") && rtext.includes("(Workshop): 042-3333333"), "all contact numbers with titles printed on the receipt");
+    check(rtext.includes("Ali Raza Owner: 0300-1111111") && rtext.includes("Usman Sales Manager: 0321-2222222") && rtext.includes("Workshop: 042-3333333") && (await page.locator('[data-testid^="contact-title"]').count()) === 0, "all contact numbers printed on the receipt as typed");
     check(rtext.includes("Thank you for your business") && rtext.includes("manufacturer's terms") && !rtext.includes("shopping with us"), "professional footer on the receipt");
     check(!rtext.includes("8,000") && !rtext.includes("12,000 profit") && !rtext.includes("Profit"), "buy price and profit are not on the slip");
     check(rtext.includes("Phone: 0300-1234567") && !rtext.includes("35202"), "ticked detail printed on the slip, the unticked one kept private");

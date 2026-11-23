@@ -359,33 +359,26 @@ function IntegrityCheck() {
   );
 }
 
-const TITLES = ["Owner", "CEO", "Director", "Managing Director", "General Manager", "Manager", "Sales Manager", "Service Manager", "Accountant", "CTO", "Salesman"];
-
 function ContactsEditor(props: { rows: { name: string; title: string; phone: string }[]; onChange: (rows: { name: string; title: string; phone: string }[]) => void }) {
-  const set = (i: number, p: Partial<{ name: string; title: string; phone: string }>) => props.onChange(props.rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  const rows = props.rows.map((r) => ({ name: [r.name, r.title].filter(Boolean).join(" "), title: "", phone: r.phone }));
+  const set = (i: number, p: Partial<{ name: string; phone: string }>) => props.onChange(rows.map((r, j) => (j === i ? { ...r, ...p } : r)));
   return (
     <div className="stack-tight" data-testid="contacts">
       <span className="lbl-text">Contact numbers (printed on every receipt)</span>
-      {props.rows.map((r, i) => (
+      {rows.map((r, i) => (
         <div key={i} className="detail-row">
-          <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name" data-testid={`contact-name-${i}`} />
-          <input value={r.title} onChange={(e) => set(i, { title: e.target.value })} placeholder="Title, like CEO or Manager" list="contact-titles" data-testid={`contact-title-${i}`} />
+          <input value={r.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name, like Arslan Owner" data-testid={`contact-name-${i}`} />
           <input className="grow" value={r.phone} onChange={(e) => set(i, { phone: e.target.value })} placeholder="Phone number" inputMode="tel" data-testid={`contact-phone-${i}`} />
-          <button type="button" className="btn btn-ghost" aria-label="Take off this number" onClick={() => props.onChange(props.rows.filter((_, j) => j !== i))}>
+          <button type="button" className="btn btn-ghost" aria-label="Take off this number" onClick={() => props.onChange(rows.filter((_, j) => j !== i))}>
             ✕
           </button>
         </div>
       ))}
       <div>
-        <button type="button" className="btn btn-small" onClick={() => props.onChange([...props.rows, { name: "", title: "", phone: "" }])} data-testid="contact-add">
+        <button type="button" className="btn btn-small" onClick={() => props.onChange([...rows, { name: "", title: "", phone: "" }])} data-testid="contact-add">
           + Add a number
         </button>
       </div>
-      <datalist id="contact-titles">
-        {TITLES.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
     </div>
   );
 }
