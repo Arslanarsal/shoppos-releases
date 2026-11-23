@@ -20,6 +20,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
   const [boughtOn, setBoughtOn] = useState(todayIso());
   const [supplier, setSupplier] = useState("");
   const stockToken = useRef(newToken());
+  const [boughtEach, setBoughtEach] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [values, setValues] = useState<Record<string, any>>({});
   const [catFields, setCatFields] = useState<FieldDef[]>([]);
@@ -50,6 +51,8 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
       setIdentifier(it.identifier);
       setPrice(moneyInput(it.sale_price));
       setReorder(it.reorder_level ?? "");
+      const m = r.money;
+      setBoughtEach(m && m.bought_qty > 0 ? Math.round(m.bought_cost / m.bought_qty) : null);
       setNotes(it.notes);
       setValues(r.values);
       setPhotos(r.photos);
@@ -106,12 +109,12 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
     if (Number.isNaN(sp)) return setError("The selling price is not a valid amount");
     const rl = parseQty(String(reorder));
     if (Number.isNaN(rl)) return setError("Low stock warning must be a whole number");
-    const q = editing ? null : tracking === "unique" ? (qty === "1" ? 1 : null) : parseQty(qty);
-    if (Number.isNaN(q)) return setError("Quantity must be a whole number, like 5");
-    const bp = parseMoney(buyPrice);
+    const bp = editing ? null : parseMoney(buyPrice);
     if (Number.isNaN(bp)) return setError("The buy price is not a valid amount");
+    const q = editing ? null : tracking === "unique" ? (bp !== null ? 1 : null) : parseQty(qty);
+    if (Number.isNaN(q)) return setError("Quantity must be a whole number, like 5");
     if (q && bp === null) return setError("Please type the price you paid for each piece");
-    if (bp !== null && !q) return setError(tracking === "unique" ? "Tick \"I have it in the shop now\" to save the buy price" : "Please type how many pieces you have");
+    if (bp !== null && !q) return setError("Please type how many pieces you have");
     setBusy(true);
     try {
       const r = await call("item_save", {
@@ -221,52 +224,66 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           </fieldset>
         )}
 
-        <div className="grid3">
-          <Label text={tracking === "unique" ? "Its own number (chassis / serial)" : "Item code (optional)"} required={tracking === "unique"}>
-            <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} data-testid="item-identifier" />
-          </Label>
-          {editing && (
-            <Label text="Selling price (each)">
-              <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" data-testid="item-price" />
+        <fieldset className="scope stock-now" data-testid="stock-section">
+          <legend>{tracking === "unique" ? "Number and prices" : "Prices and stock"}</legend>
+          <div className="grid4">
+            <Label text={tracking === "unique" ? "Chassis / serial number" : "Item code (optional)"} required={tracking === "unique"}>
+              <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} data-testid="item-identifier" />
             </Label>
-          )}
-          {tracking === "quantity" && (
-            <Label text="Warn me when stock is at or below (optional)">
-              <input inputMode="numeric" value={reorder} onChange={(e) => setReorder(e.target.value)} />
-            </Label>
-          )}
-        </div>
-
-        {!editing && (
-          <fieldset className="scope stock-now" data-testid="stock-section">
-            <legend>Price and stock</legend>
-            <div className="grid4">
-              {tracking === "quantity" ? (
-                <Label text="Quantity (pieces)">
-                  <input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" data-testid="item-qty" />
-                </Label>
-              ) : (
-                <label className="check" style={{ alignSelf: "end" }}>
-                  <input type="checkbox" checked={qty === "1"} onChange={(e) => setQty(e.target.checked ? "1" : "")} data-testid="item-have" /> I have it in the shop now
-                </label>
-              )}
-              <Label text="Buy price (each)">
+            {tracking === "quantity" && !editing && (
+              <Label text="Quantity (pieces)">
+                <input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" data-testid="item-qty" />
+              </Label>
+            )}
+            {editing ? (
+              <Label text={tracking === "unique" ? "Buy price" : "Buy price (each)"} hint={boughtEach === null ? "Not bought yet. Press Buy more on the item." : "From your purchases"}>
+                <input value={boughtEach === null ? "" : moneyInput(boughtEach)} disabled data-testid="item-buy-price" />
+              </Label>
+            ) : (
+              <Label text={tracking === "unique" ? "Buy price" : "Buy price (each)"}>
                 <input inputMode="decimal" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)} placeholder="0" data-testid="item-buy-price" />
               </Label>
-              <Label text="Selling price (each)">
-                <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" data-testid="item-price" />
-              </Label>
+            )}
+            <Label text={tracking === "unique" ? "Selling price" : "Selling price (each)"}>
+              <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" data-testid="item-price" />
+            </Label>
+          </div>
+          <ProfitLine
+            qty={editing ? 1 : tracking === "unique" ? 1 : parseQty(qty)}
+            buy={editing ? boughtEach : parseMoney(buyPrice)}
+            sell={parseMoney(price)}
+            unique={tracking === "unique"}
+          />
+          {!editing && (
+            <div className="grid4">
               <Label text="Date bought">
                 <input type="date" value={boughtOn} onChange={(e) => setBoughtOn(e.target.value)} data-testid="item-bought-on" />
               </Label>
               <Label text="Bought from (optional)">
                 <input value={supplier} onChange={(e) => setSupplier(e.target.value)} data-testid="item-supplier" />
               </Label>
+              {tracking === "quantity" && (
+                <Label text="Warn me when stock is at or below (optional)">
+                  <input inputMode="numeric" value={reorder} onChange={(e) => setReorder(e.target.value)} />
+                </Label>
+              )}
             </div>
-            <StockPreview qty={tracking === "unique" ? (qty === "1" ? "1" : "") : qty} buy={buyPrice} sell={price} />
-          </fieldset>
-        )}
-        {editing && <p className="muted small">To add more stock of this item later, open it and press Buy more.</p>}
+          )}
+          {editing && tracking === "quantity" && (
+            <div className="grid4">
+              <Label text="Warn me when stock is at or below (optional)">
+                <input inputMode="numeric" value={reorder} onChange={(e) => setReorder(e.target.value)} />
+              </Label>
+            </div>
+          )}
+          <p className="muted small">
+            {editing
+              ? "To add more stock later, open the item and press Buy more."
+              : tracking === "unique"
+                ? "Leave the buy price empty if it is not in the shop yet. You can record the purchase later."
+                : "Leave the quantity empty if you have none yet. You can add stock later with Record purchase."}
+          </p>
+        </fieldset>
 
         <div className="section-head">
           <h2>Details</h2>
@@ -348,23 +365,25 @@ export function NewCategory(props: { onClose: () => void; onCreated: (c: Categor
   );
 }
 
-function StockPreview(props: { qty: string; buy: string; sell: string }) {
-  const q = parseQty(props.qty);
-  const b = parseMoney(props.buy);
-  const sp = parseMoney(props.sell);
-  if (!q || b === null || Number.isNaN(q) || Number.isNaN(b)) {
-    return <p className="muted small">Leave the quantity empty if you have none yet. You can add stock later with Record purchase.</p>;
-  }
-  const each = sp !== null && !Number.isNaN(sp) ? sp - b : null;
+function ProfitLine(props: { qty: number | null; buy: number | null; sell: number | null; unique: boolean }) {
+  const ok = (v: number | null) => v !== null && !Number.isNaN(v);
+  if (!ok(props.buy) || !ok(props.sell)) return null;
+  const each = (props.sell as number) - (props.buy as number);
+  const q = ok(props.qty) && (props.qty as number) > 0 ? (props.qty as number) : 1;
+  const cls = each > 0 ? "profit" : each < 0 ? "loss" : "";
+  const word = each < 0 ? "Loss" : "Profit";
   return (
-    <p className="small" data-testid="stock-preview">
-      You paid <strong>{money(q * b)}</strong> for {q} piece(s).
-      {each !== null && (
-        <>
+    <div className={`profit-line ${cls}`} data-testid="stock-preview">
+      <strong>
+        {word} {money(Math.abs(each))}
+        {props.unique ? "" : " on each piece"}
+      </strong>
+      {!props.unique && q > 1 && (
+        <span>
           {" "}
-          Selling each one makes <strong className={each > 0 ? "profit" : each < 0 ? "loss" : ""}>{each < 0 ? `a loss of ${money(-each)}` : `a profit of ${money(each)}`}</strong>.
-        </>
+          ({word.toLowerCase()} {money(Math.abs(each) * q)} on all {q}. You pay {money((props.buy as number) * q)}.)
+        </span>
       )}
-    </p>
+    </div>
   );
 }

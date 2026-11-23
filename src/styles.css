@@ -1227,3 +1227,16 @@ details summary {
 .money-grid small {
   display: block;
 }
+
+.profit-line {
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  background: var(--hover);
+  font-size: 1.05rem;
+}
+.profit-line.profit {
+  background: color-mix(in srgb, #15803d 12%, transparent);
+}
+.profit-line.loss {
+  background: color-mix(in srgb, #b91c1c 12%, transparent);
+}

@@ -381,7 +381,8 @@ async function main() {
     await page.fill('[data-testid="item-buy-price"]', "1500");
     await page.fill('[data-testid="item-price"]', "2000");
     await page.fill('[data-testid="item-supplier"]', "Karachi Plastics");
-    check((await page.textContent('[data-testid="stock-preview"]')).includes("Rs 30,000") && (await page.textContent('[data-testid="stock-preview"]')).includes("profit of Rs 500"), "form shows total paid and profit per piece");
+    const pv = await page.textContent('[data-testid="stock-preview"]');
+    check(pv.includes("Profit Rs 500 on each piece") && pv.includes("Rs 10,000") && pv.includes("Rs 30,000"), "form shows profit per piece, on all 20, and total paid");
     await page.click('[data-testid="item-save"]');
     await page.locator('[data-testid="stock-now"]', { hasText: "20" }).waitFor();
     check(true, "new item opens with 20 in stock");
@@ -390,6 +391,23 @@ async function main() {
     const ph = await api(portA, "line_search", { kinds: ["purchase"], text: "Plastic chair" });
     check(ph.data.total === 1 && JSON.stringify(ph.data).includes("Karachi Plastics"), "purchase record with supplier is in history");
     await shot(page, "G-item-with-stock");
+    await page.goto(base + "#/item/new");
+    await page.fill('[data-testid="item-name"]', "Honda CD70");
+    await page.selectOption('[data-testid="item-category"]', { label: "Scooter" });
+    await page.check('[data-testid="tracking-unique"]');
+    await page.fill('[data-testid="item-identifier"]', "CD-555");
+    await page.fill('[data-testid="item-buy-price"]', "90000");
+    await page.fill('[data-testid="item-price"]', "120000");
+    check((await page.textContent('[data-testid="stock-preview"]')).includes("Profit Rs 30,000"), "one of a kind: chassis, buy price, selling price and profit on one row");
+    await shot(page, "G-unique-prices");
+    await page.click('[data-testid="item-save"]');
+    await page.locator('[data-testid="stock-now"]', { hasText: "1" }).waitFor();
+    const cd = (await api(portA, "item_search", { text: "CD-555" })).data.rows[0];
+    check(cd.stock === 1 && cd.money.bought_cost === 9000000, "scooter saved in stock, bought at Rs 90,000");
+    await page.goto(base + `#/item/${cd.id}/edit`);
+    await page.locator('[data-testid="item-buy-price"]').waitFor();
+    await page.waitForFunction(() => document.querySelector('[data-testid="item-buy-price"]').value === "90000");
+    check((await page.textContent('[data-testid="stock-preview"]')).includes("Profit Rs 30,000"), "edit screen shows what it was bought for and the profit");
 
     const exportDir = P.join(work, "export-drive");
     disk.mkdir(exportDir);
