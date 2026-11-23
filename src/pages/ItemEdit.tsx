@@ -21,6 +21,16 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
   const [supplier, setSupplier] = useState("");
   const stockToken = useRef(newToken());
   const [boughtEach, setBoughtEach] = useState<number | null>(null);
+  const [taken, setTaken] = useState<any>(null);
+  useEffect(() => {
+    if (tracking !== "unique" || !identifier.trim()) return setTaken(null);
+    const t = setTimeout(() => {
+      call("identifier_check", { identifier, except: props.id ?? null })
+        .then((r) => setTaken(r.free ? null : r))
+        .catch(() => {});
+    }, 250);
+    return () => clearTimeout(t);
+  }, [identifier, tracking, props.id]);
   const [notes, setNotes] = useState("");
   const [values, setValues] = useState<Record<string, any>>({});
   const [catFields, setCatFields] = useState<FieldDef[]>([]);
@@ -105,6 +115,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
   const save = async () => {
     setError("");
     if (!categoryId) return setError("Please choose a category");
+    if (taken) return setError(`Chassis / serial number already used by "${taken.name}". Each number must be different.`);
     const sp = parseMoney(price);
     if (Number.isNaN(sp)) return setError("The selling price is not a valid amount");
     const rl = parseQty(String(reorder));
@@ -228,7 +239,12 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
           <legend>{tracking === "unique" ? "Number and prices" : "Prices and stock"}</legend>
           <div className="grid4">
             <Label text={tracking === "unique" ? "Chassis / serial number" : "Item code (optional)"} required={tracking === "unique"}>
-              <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} data-testid="item-identifier" />
+              <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} className={taken ? "input-bad" : ""} data-testid="item-identifier" />
+              {taken && (
+                <span className="field-error" data-testid="identifier-taken">
+                  Already used by "{taken.name}" ({taken.identifier}). Each number must be different.
+                </span>
+              )}
             </Label>
             {tracking === "quantity" && !editing && (
               <Label text="Quantity (pieces)">

@@ -558,3 +558,43 @@ fn correct_stock_reason_is_optional() {
     let s = ok(&core, "item_search", json!({ "text": "Desk" }));
     assert_eq!(s["rows"][0]["stock"], 2);
 }
+
+#[test]
+fn after_a_sale_photos_notes_and_customer_can_be_added_but_money_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let (_, desk) = setup_desks(&core);
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 3, "unit_price": 100 }, { "item_id": desk, "qty": 1, "unit_price": 160 }] }));
+    let pv = ok(&core, "sale_cost_preview", json!({ "item_id": desk, "qty": 4, "date": "2026-03-02" }));
+    assert_eq!(pv["cost"], 460, "cost of the next pieces, oldest first");
+    let pv = ok(&core, "sale_cost_preview", json!({ "item_id": desk, "qty": 9, "date": "2026-03-02" }));
+    assert!(pv["cost"].is_null());
+    let s = ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "party": "Bilal", "lines": [{ "item_id": desk, "qty": 2, "unit_price": 200 }] }));
+    let id = s["id"].as_i64().unwrap();
+    let p1 = ok(&core, "photo_store", json!({ "name": "a.jpg", "data": b64(&jpeg(1)) }));
+    let p2 = ok(&core, "photo_store", json!({ "name": "b.jpg", "data": b64(&jpeg(2)) }));
+    ok(&core, "txn_add", json!({ "txn_id": id, "photos": [p1] }));
+    let t = ok(&core, "txn_add", json!({ "txn_id": id, "photos": [p2], "note": "Customer paid by bank transfer", "party": "Bilal Ahmed 0300-1234567" }));
+    assert_eq!(t["photos"].as_array().unwrap().len(), 2);
+    assert_eq!(t["party"], "Bilal Ahmed 0300-1234567");
+    assert_eq!(t["party_original"], "Bilal");
+    assert_eq!(t["extras"].as_array().unwrap().len(), 2);
+    assert_eq!(t["total"], s["total"], "money on the sale does not change");
+    assert!(err(&core, "txn_add", json!({ "txn_id": id })).contains("Nothing"));
+}
+
+#[test]
+fn chassis_numbers_must_be_different() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let cat = ok(&core, "category_create", json!({ "name": "Scooter" }))["id"].as_i64().unwrap();
+    let a = ok(&core, "item_save", json!({ "category_id": cat, "name": "Honda CD70", "tracking": "unique", "identifier": "CD-555" }))["item"]["id"].as_i64().unwrap();
+    for same in ["CD-555", "cd-555", " CD 555 ", "CD555", "cd_555"] {
+        let e = err(&core, "item_save", json!({ "category_id": cat, "name": "Other bike", "tracking": "unique", "identifier": same }));
+        assert!(e.contains("already used") && e.contains("Honda CD70"), "{same}: {e}");
+    }
+    ok(&core, "item_save", json!({ "category_id": cat, "name": "Honda 125", "tracking": "unique", "identifier": "CD-556" }));
+    ok(&core, "item_save", json!({ "id": a, "category_id": cat, "name": "Honda CD70 red", "tracking": "unique", "identifier": "CD 555" }));
+    assert_eq!(ok(&core, "identifier_check", json!({ "identifier": "cd555" }))["free"], false);
+    assert_eq!(ok(&core, "identifier_check", json!({ "identifier": "cd555", "except": a }))["free"], true);
+}

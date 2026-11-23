@@ -486,6 +486,12 @@ fn business(c: &mut Connection, cmd: &str, a: &Value) -> Result<Value> {
             item_get(c, id)?
         }
         "item_get" => item_get(c, id_of(a)?)?,
+        "txn_add" => stock::txn_add(c, &arg(a)?)?,
+        "identifier_check" => match catalog::identifier_owner(c, s(a, "identifier"), a["except"].as_i64())? {
+            Some((name, ident)) => json!({ "free": false, "name": name, "identifier": ident }),
+            None => json!({ "free": true }),
+        },
+        "sale_cost_preview" => stock::cost_preview(c, a["item_id"].as_i64().unwrap_or(0), a["qty"].as_i64().unwrap_or(1).max(1), s(a, "date"))?,
         "item_set_condition" => {
             catalog::item_set_condition(c, id_of(a)?, s(a, "condition"))?;
             json!(true)

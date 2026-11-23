@@ -120,13 +120,14 @@ pub struct DocInput {
 
 fn insert_txn_photos(tx: &Connection, txn_id: i64, photos: &[crate::catalog::PhotoRef]) -> Result<()> {
     let now = chrono::Utc::now().to_rfc3339();
+    let start: i64 = tx.query_row("SELECT COUNT(*) FROM txn_photos WHERE txn_id=?1", [txn_id], |r| r.get(0))?;
     for (i, p) in photos.iter().enumerate() {
         if !p.file.starts_with("photos/") || p.file.contains("..") || p.file.contains('\\') {
             return user("A picture could not be attached. Please add it again.");
         }
         tx.execute(
             "INSERT INTO txn_photos(txn_id,file,sha256,bytes,original_name,sort_order,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
-            params![txn_id, p.file, p.sha256, p.bytes, p.original_name, i as i64, now],
+            params![txn_id, p.file, p.sha256, p.bytes, p.original_name, start + i as i64, now],
         )?;
     }
     Ok(())
@@ -714,6 +715,15 @@ pub fn txn_get(conn: &Connection, id: i64) -> Result<Value> {
         .query_map([id], |r| Ok(json!({ "id": r.get::<_, i64>(0)?, "file": r.get::<_, String>(1)?, "original_name": r.get::<_, String>(2)? })))?
         .collect::<std::result::Result<_, _>>()?;
     t["photos"] = Value::Array(photos);
+    let extras: Vec<Value> = conn
+        .prepare("SELECT id, kind, text, created_at FROM txn_extras WHERE txn_id=?1 ORDER BY id")?
+        .query_map([id], |r| Ok(json!({ "id": r.get::<_, i64>(0)?, "kind": r.get::<_, String>(1)?, "text": r.get::<_, String>(2)?, "created_at": r.get::<_, String>(3)? })))?
+        .collect::<std::result::Result<_, _>>()?;
+    if let Some(p) = extras.iter().rev().find(|e| e["kind"] == "party") {
+        t["party_original"] = t["party"].clone();
+        t["party"] = p["text"].clone();
+    }
+    t["extras"] = Value::Array(extras);
     let rev = conn
         .query_row("SELECT id, number, business_date, reason FROM txns WHERE kind='reversal' AND related_txn_id=?1", [id], |r| {
             Ok(json!({ "id": r.get::<_, i64>(0)?, "number": r.get::<_, String>(1)?, "business_date": r.get::<_, String>(2)?, "reason": r.get::<_, String>(3)? }))
@@ -747,4 +757,42 @@ pub fn item_moves(conn: &Connection, item_id: i64) -> Result<Vec<Value>> {
         out.push(json!({ "txn_id": id, "number": no, "kind": kind, "related_kind": rk, "business_date": date, "qty": q, "cost": c, "balance": bal, "reason": reason, "party": party }));
     }
     Ok(out)
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TxnAddInput {
+    pub txn_id: i64,
+    #[serde(default)]
+    pub photos: Vec<crate::catalog::PhotoRef>,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub party: Option<String>,
+}
+
+pub fn txn_add(conn: &mut Connection, d: &TxnAddInput) -> Result<Value> {
+    let tx = begin(conn)?;
+    txn_head(&tx, d.txn_id)?;
+    let now = chrono::Utc::now().to_rfc3339();
+    let note = d.note.trim();
+    let party = d.party.as_deref().map(str::trim);
+    if d.photos.is_empty() && note.is_empty() && party.is_none() {
+        return user("Nothing to add");
+    }
+    insert_txn_photos(&tx, d.txn_id, &d.photos)?;
+    if !note.is_empty() {
+        tx.execute("INSERT INTO txn_extras(txn_id,kind,text,created_at) VALUES(?1,'note',?2,?3)", params![d.txn_id, note, now])?;
+    }
+    if let Some(p) = party {
+        tx.execute("INSERT INTO txn_extras(txn_id,kind,text,created_at) VALUES(?1,'party',?2,?3)", params![d.txn_id, p, now])?;
+    }
+    tx.commit()?;
+    txn_get(conn, d.txn_id)
+}
+
+pub fn cost_preview(conn: &Connection, item_id: i64, qty: i64, date: &str) -> Result<Value> {
+    match plan_fifo(conn, item_id, qty, date) {
+        Ok((plan, cost)) => Ok(json!({ "cost": cost, "lots": plan.iter().map(|(_, d, q, c)| json!({ "date": d, "qty": q, "cost": c })).collect::<Vec<_>>() })),
+        Err(_) => Ok(json!({ "cost": null, "lots": [] })),
+    }
 }

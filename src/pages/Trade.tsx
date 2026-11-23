@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { call, fileUrl, newToken, uploadImage } from "../api";
+import { displayValue } from "../components/Fields";
 import { ItemPicker, PickedItem, Receipt } from "../components/Pickers";
-import { money, moneyInput, parseMoney, parseQty, todayIso } from "../format";
+import { date, money, moneyInput, parseMoney, parseQty, todayIso } from "../format";
 import { ErrorBox, Label, Modal, go, useApp } from "../ui";
 import ItemEdit from "./ItemEdit";
 
@@ -56,6 +57,27 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
       return [...ls, { key: Date.now() + Math.random(), item: it, qty: "1", price: sale && it.sale_price !== null ? moneyInput(it.sale_price) : "", disc: "" }];
     });
   };
+  const [info, setInfo] = useState<Record<number, any>>({});
+  const [costs, setCosts] = useState<Record<string, any>>({});
+  useEffect(() => {
+    for (const l of lines) {
+      if (info[l.item.id] === undefined) {
+        setInfo((x) => ({ ...x, [l.item.id]: null }));
+        call("item_get", { id: l.item.id }).then((r) => setInfo((x) => ({ ...x, [l.item.id]: r }))).catch(() => {});
+      }
+    }
+  }, [lines]);
+  useEffect(() => {
+    if (!sale) return;
+    for (const l of lines) {
+      const q = parseQty(l.qty);
+      if (!q || Number.isNaN(q)) continue;
+      const k = `${l.item.id}:${q}:${day}`;
+      if (costs[k] !== undefined) continue;
+      setCosts((x) => ({ ...x, [k]: null }));
+      call("sale_cost_preview", { item_id: l.item.id, qty: q, date: day }).then((r) => setCosts((x) => ({ ...x, [k]: r }))).catch(() => {});
+    }
+  }, [lines, day]);
   const upd = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
   const calc = lines.map((l) => {
@@ -190,7 +212,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
                 </td>
               </tr>
             )}
-            {lines.map((l, i) => (
+            {lines.map((l, i) => [
               <tr key={l.key}>
                 <td>
                   <strong>{l.item.name}</strong>
@@ -214,8 +236,13 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
                     ✕
                   </button>
                 </td>
-              </tr>
-            ))}
+              </tr>,
+              <tr key={`${l.key}-info`} className="line-info-row no-print">
+                <td colSpan={6}>
+                  <LineInfo info={info[l.item.id]} cost={sale ? costs[`${l.item.id}:${calc[i].q}:${day}`] : undefined} amount={calc[i].ok ? calc[i].amount : null} qty={calc[i].q} sale={sale} />
+                </td>
+              </tr>,
+            ])}
           </tbody>
         </table>
         <div className="totals-row">
@@ -309,6 +336,59 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
           />
         </Modal>
       )}
+    </div>
+  );
+}
+
+function LineInfo(props: { info: any; cost: any; amount: number | null; qty: number; sale: boolean }) {
+  const r = props.info;
+  if (!r) return <div className="line-info muted small">Loading details...</div>;
+  const filled = (r.fields as any[]).filter((f) => !f.archived && r.values[String(f.id)] !== undefined && r.values[String(f.id)] !== null && r.values[String(f.id)] !== "");
+  const cost = props.cost?.cost;
+  const profit = props.sale && cost !== null && cost !== undefined && props.amount !== null ? props.amount - cost : null;
+  const lots: any[] = props.cost?.lots ?? [];
+  return (
+    <div className="line-info" data-testid="line-info">
+      {r.photos[0] && <img src={fileUrl(r.photos[0].file)} alt="" />}
+      <div className="line-info-body">
+        <div className="chips">
+          {r.item.identifier && (
+            <span className="chip">
+              <b>{r.item.tracking === "unique" ? "Chassis / serial" : "Code"}:</b> {r.item.identifier}
+            </span>
+          )}
+          {filled.map((f) => (
+            <span key={f.id} className="chip">
+              <b>{f.name}:</b> {displayValue(f, r.values[String(f.id)])}
+            </span>
+          ))}
+          {r.item.notes && (
+            <span className="chip">
+              <b>Notes:</b> {r.item.notes}
+            </span>
+          )}
+        </div>
+        {props.sale && (
+          <div className="line-money">
+            {cost === null || cost === undefined ? (
+              <span className="muted">Not enough stock to work out the cost.</span>
+            ) : (
+              <>
+                <span>
+                  Bought for <b>{money(Math.round(cost / Math.max(props.qty, 1)))}</b> each
+                  {lots.length > 0 && <span className="muted"> ({lots.map((l) => `${l.qty} on ${date(l.date)}`).join(", ")})</span>}
+                </span>
+                {profit !== null && (
+                  <span className={profit > 0 ? "profit" : profit < 0 ? "loss" : ""} data-testid="line-profit">
+                    <b>{profit < 0 ? `Loss ${money(-profit)}` : `Profit ${money(profit)}`}</b>
+                  </span>
+                )}
+                <span className="muted small">Only you see this. It is not printed on the slip.</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -623,17 +623,30 @@ fn check_identifier_free(conn: &Connection, identifier: &str, except: Option<i64
     if identifier.is_empty() {
         return user("A unique item needs its own number (for example a chassis or serial number)");
     }
-    let other: Option<String> = conn
-        .query_row(
-            "SELECT name FROM items WHERE tracking='unique' AND identifier=?1 COLLATE NOCASE AND id IS NOT ?2",
-            params![identifier, except],
-            |r| r.get(0),
-        )
-        .optional()?;
-    if let Some(n) = other {
-        return user(format!("The number {identifier} is already used by \"{n}\""));
+    if let Some((n, num)) = identifier_owner(conn, identifier, except)? {
+        return user(format!("Chassis / serial number {identifier} is already used by \"{n}\" ({num}). Each one must be different."));
     }
     Ok(())
+}
+
+pub fn identifier_key(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).flat_map(|c| c.to_uppercase()).collect()
+}
+
+pub fn identifier_owner(conn: &Connection, identifier: &str, except: Option<i64>) -> Result<Option<(String, String)>> {
+    let key = identifier_key(identifier);
+    if key.is_empty() {
+        return Ok(None);
+    }
+    let mut st = conn.prepare("SELECT id, name, identifier FROM items WHERE tracking='unique' AND identifier <> ''")?;
+    let rows = st.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?)))?;
+    for row in rows {
+        let (id, name, ident) = row?;
+        if Some(id) != except && identifier_key(&ident) == key {
+            return Ok(Some((name, ident)));
+        }
+    }
+    Ok(None)
 }
 
 fn has_value(conn: &Connection, item_id: i64, field_id: i64) -> Result<bool> {

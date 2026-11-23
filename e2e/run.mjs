@@ -261,16 +261,30 @@ async function main() {
     await page.waitForFunction(() => document.querySelectorAll(".trade-photo img").length === 3);
     check(true, "3 photos added next to the customer, one taken off and added again");
     check((await page.textContent('[data-testid="trade-total"]')) === "Rs 36,000", "sale total before confirm");
+    await page.locator('[data-testid="line-profit"]', { hasText: "Profit Rs 12,000" }).waitFor();
+    const li = await page.textContent('[data-testid="line-info"]');
+    check(li.includes("Drawer count: 4") && li.includes("Bought for Rs 8,000") && li.includes("Profit Rs 12,000"), "sale line shows the item details, buy price and profit");
     await page.click('[data-testid="trade-review"]');
     await page.click('[data-testid="trade-confirm"]');
     await page.locator('[data-testid="receipt"]').waitFor();
     const rtext = await page.textContent('[data-testid="receipt"]');
     check(rtext.includes("Arslan Furniture and Bikes") && rtext.includes("Rs 36,000") && rtext.includes("Bilal"), "branded receipt with total");
+    check(!rtext.includes("8,000") && !rtext.includes("12,000 profit") && !rtext.includes("Profit"), "buy price and profit are not on the slip");
     check(await photoLoaded(page, ".r-logo"), "logo on receipt");
     await shot(page, "B-receipt");
     await page.click("text=Open record");
     await page.locator('[data-testid="txn-photos"] img').first().waitFor();
     check((await page.locator('[data-testid="txn-photos"] img').count()) === 3 && (await photoLoaded(page, '[data-testid="txn-photos"] img')), "sale record shows its 3 photos");
+    await page.setInputFiles('[data-testid="record-photo-input"]', [await makeJpeg(page, "later.jpg", "#aa3366", "LATER")]);
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid="txn-photos"] img').length === 4);
+    await page.click('[data-testid="record-party-edit"]');
+    await page.fill('[data-testid="record-party-input"]', "Bilal Ahmed 0300-1234567");
+    await page.click('[data-testid="record-party-save"]');
+    await page.locator('[data-testid="record-party"]', { hasText: "0300-1234567" }).waitFor();
+    await page.fill('[data-testid="record-note"]', "Paid the rest by bank transfer");
+    await page.click('[data-testid="record-note-save"]');
+    await page.locator('[data-testid="record-extras"]', { hasText: "bank transfer" }).waitFor();
+    check(true, "after the sale: one more photo, new customer details and a note added");
     await shot(page, "B-sale-photos");
     await page.goto(base + "#/sale");
 
@@ -395,7 +409,12 @@ async function main() {
     await page.fill('[data-testid="item-name"]', "Honda CD70");
     await page.selectOption('[data-testid="item-category"]', { label: "Scooter" });
     await page.check('[data-testid="tracking-unique"]');
+    await page.fill('[data-testid="item-identifier"]', "chs 778899");
+    await page.locator('[data-testid="identifier-taken"]', { hasText: "Used Vespa" }).waitFor();
+    await page.click('[data-testid="item-save"]');
+    check((await page.textContent(".alert-error")).includes("must be different"), "same chassis number (typed differently) is refused");
     await page.fill('[data-testid="item-identifier"]', "CD-555");
+    await page.locator('[data-testid="identifier-taken"]').waitFor({ state: "detached" });
     await page.fill('[data-testid="item-buy-price"]', "90000");
     await page.fill('[data-testid="item-price"]', "120000");
     check((await page.textContent('[data-testid="stock-preview"]')).includes("Profit Rs 30,000"), "one of a kind: chassis, buy price, selling price and profit on one row");
@@ -462,7 +481,8 @@ async function main() {
     check(await photoLoaded(page, '[data-testid="item-photo"]'), "photo restored");
     await page.goto(baseB + `#/txn/2`);
     check(await photoLoaded(page, ".r-logo"), "receipt logo restored");
-    check((await page.locator('[data-testid="txn-photos"] img').count()) === 3 && (await photoLoaded(page, '[data-testid="txn-photos"] img')), "sale photos restored");
+    check((await page.locator('[data-testid="txn-photos"] img').count()) === 4 && (await photoLoaded(page, '[data-testid="txn-photos"] img')), "sale photos, including ones added later, restored");
+    check((await page.textContent('[data-testid="record-extras"]')).includes("bank transfer"), "notes added after the sale restored");
     await shot(page, "D-restored-receipt");
     srvB.kill();
   } catch (e) {

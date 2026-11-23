@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { call, fileUrl, newToken } from "../api";
+import { useRef, useState } from "react";
+import { call, fileUrl, newToken, uploadImage } from "../api";
 import { Receipt } from "../components/Pickers";
 import { date, kindLabel, money, todayIso } from "../format";
 import { ErrorBox, Label, Modal, go, useApp, useAsync } from "../ui";
@@ -61,18 +61,7 @@ export default function TxnPage(props: { id: number }) {
           </div>
         )}
       </div>
-      {t.photos?.length > 0 && (
-        <div className="card no-print">
-          <h2>Photos ({t.photos.length})</h2>
-          <div className="txn-photos" data-testid="txn-photos">
-            {t.photos.map((p: any) => (
-              <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
-                <img src={fileUrl(p.file)} alt={p.original_name} />
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
+      <AddToRecord t={t} onDone={reload} />
       <div className="receipt-wrap">
         <Receipt txn={t} />
       </div>
@@ -208,5 +197,104 @@ function ReturnDialog(props: { txn: any; onClose: () => void; onDone: (id: numbe
         <ErrorBox text={error} />
       </div>
     </Modal>
+  );
+}
+
+function AddToRecord(props: { t: any; onDone: () => void }) {
+  const { toast } = useApp();
+  const t = props.t;
+  const [note, setNote] = useState("");
+  const [party, setParty] = useState<string | null>(null);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const who = t.kind === "purchase" ? "Supplier" : "Customer";
+  const send = async (patch: any, msg: string) => {
+    setError("");
+    try {
+      await call("txn_add", { txn_id: t.id, ...patch });
+      toast(msg);
+      props.onDone();
+      return true;
+    } catch (e: any) {
+      setError(e.message);
+      return false;
+    }
+  };
+  const addPhotos = async (files: FileList | null) => {
+    const list = Array.from(files ?? []);
+    if (input.current) input.current.value = "";
+    if (!list.length) return;
+    setBusy(`Adding ${list.length} photo(s)...`);
+    const refs = [];
+    for (const f of list) {
+      try {
+        refs.push(await uploadImage("photo_store", f));
+      } catch (e: any) {
+        toast(`${f.name}: ${e.message}`, "error");
+      }
+    }
+    if (refs.length) await send({ photos: refs }, `${refs.length} photo(s) added to ${t.number}`);
+    setBusy("");
+  };
+  return (
+    <div className="card stack no-print" data-testid="add-to-record">
+      <div className="section-head">
+        <h2>Photos ({t.photos?.length ?? 0})</h2>
+        <button className="btn" onClick={() => input.current?.click()} disabled={!!busy} data-testid="record-photo-add">
+          {busy || "+ Add photos"}
+        </button>
+        <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => addPhotos(e.target.files)} data-testid="record-photo-input" />
+      </div>
+      {t.photos?.length > 0 ? (
+        <div className="txn-photos" data-testid="txn-photos">
+          {t.photos.map((p: any) => (
+            <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
+              <img src={fileUrl(p.file)} alt={p.original_name} />
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p className="muted small">No photos yet. You can add photos any time, like the customer's ID card or a payment slip.</p>
+      )}
+      <div className="row">
+        <span>
+          {who}: <strong data-testid="record-party">{t.party || "-"}</strong>
+          {t.party_original !== undefined && <span className="muted small"> (first saved as "{t.party_original || "-"}")</span>}
+        </span>
+        {party === null ? (
+          <button className="btn btn-small" onClick={() => setParty(t.party || "")} data-testid="record-party-edit">
+            Change
+          </button>
+        ) : (
+          <>
+            <input value={party} onChange={(e) => setParty(e.target.value)} placeholder="Name and phone" autoFocus data-testid="record-party-input" />
+            <button className="btn btn-primary btn-small" onClick={async () => (await send({ party }, `${who} updated`)) && setParty(null)} data-testid="record-party-save">
+              Save
+            </button>
+            <button className="btn btn-small" onClick={() => setParty(null)}>
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+      <div className="row nowrap">
+        <input className="grow" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note to this record, like: paid the rest by bank transfer" data-testid="record-note" />
+        <button className="btn" disabled={!note.trim()} onClick={async () => (await send({ note }, "Note added")) && setNote("")} data-testid="record-note-save">
+          Add note
+        </button>
+      </div>
+      {t.extras?.length > 0 && (
+        <ul className="extras" data-testid="record-extras">
+          {t.extras.map((e: any) => (
+            <li key={e.id}>
+              <span className="muted small">{e.created_at.slice(0, 16).replace("T", " ")} UTC</span> {e.kind === "party" ? `${who} changed to "${e.text}"` : e.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="muted small">Amounts and items cannot be changed after saving, so your money records stay right. Use Return items or Reverse for that.</p>
+      <ErrorBox text={error} />
+    </div>
   );
 }
