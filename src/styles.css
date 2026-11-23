@@ -1299,3 +1299,51 @@ details summary {
 .input-bad {
   border-color: var(--err) !important;
 }
+
+.details-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.detail-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.detail-row > input:first-child {
+  width: 12rem;
+}
+.chip-btn {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.chip-btn:hover {
+  border-color: var(--accent);
+}
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lot-source {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-left: 3px solid var(--line);
+  padding-left: 0.6rem;
+  font-size: 0.9rem;
+}
+.lot-photos {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.lot-photos img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}

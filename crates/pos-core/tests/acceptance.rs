@@ -598,3 +598,24 @@ fn chassis_numbers_must_be_different() {
     assert_eq!(ok(&core, "identifier_check", json!({ "identifier": "cd555" }))["free"], false);
     assert_eq!(ok(&core, "identifier_check", json!({ "identifier": "cd555", "except": a }))["free"], true);
 }
+
+#[test]
+fn sale_details_any_number_some_printed() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = new_shop(dir.path());
+    let (_, desk) = setup_desks(&core);
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 2, "unit_price": 100 }] }));
+    let s = ok(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "party": "Bilal",
+        "details": [{ "name": "Phone", "value": "0300-1234567", "print": true }, { "name": "CNIC", "value": "35202-1234567-1" }, { "name": "", "value": "" }],
+        "lines": [{ "item_id": desk, "qty": 1, "unit_price": 200 }] }));
+    assert_eq!(s["info"].as_array().unwrap().len(), 2);
+    assert_eq!(s["info"][0]["print"], true);
+    assert_eq!(s["info"][1]["print"], false);
+    let t = ok(&core, "txn_add", json!({ "txn_id": s["id"], "details": [{ "name": "Warranty", "value": "6 months", "print": true }] }));
+    assert_eq!(t["info"].as_array().unwrap().len(), 3);
+    assert!(err(&core, "sale_post", json!({ "client_token": tok(), "business_date": "2026-03-02", "details": [{ "name": "Phone", "value": "" }], "lines": [{ "item_id": desk, "qty": 1, "unit_price": 200 }] })).contains("Phone"));
+    let names = ok(&core, "detail_names", json!({}));
+    assert!(names.as_array().unwrap().iter().any(|n| n == "Phone"));
+    let db = rusqlite::Connection::open(dir.path().join("shop.db")).unwrap();
+    assert!(db.execute("DELETE FROM txn_details", []).is_err());
+}

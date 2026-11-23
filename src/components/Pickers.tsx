@@ -106,6 +106,13 @@ export function Receipt(props: { txn: any }) {
         <span>{date(t.business_date, s.date_format)}</span>
       </div>
       {t.party && <div className="r-meta">{t.kind === "purchase" ? "Supplier" : "Customer"}: {t.party}</div>}
+      {t.info
+        ?.filter((d: any) => d.print)
+        .map((d: any) => (
+          <div key={d.id ?? d.name} className="r-meta" data-testid="r-info">
+            {d.name}: {d.value}
+          </div>
+        ))}
       {t.related && (
         <div className="r-meta">
           {kindLabel(t.kind, t.related_kind)} of {t.related.number}

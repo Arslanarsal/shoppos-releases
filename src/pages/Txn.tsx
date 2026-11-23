@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { call, fileUrl, newToken, uploadImage } from "../api";
+import { Detail, DetailRows } from "../components/Details";
 import { Receipt } from "../components/Pickers";
 import { date, kindLabel, money, todayIso } from "../format";
 import { ErrorBox, Label, Modal, go, useApp, useAsync } from "../ui";
@@ -204,6 +205,7 @@ function AddToRecord(props: { t: any; onDone: () => void }) {
   const { toast } = useApp();
   const t = props.t;
   const [note, setNote] = useState("");
+  const [more, setMore] = useState<Detail[]>([]);
   const [party, setParty] = useState<string | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -276,6 +278,32 @@ function AddToRecord(props: { t: any; onDone: () => void }) {
               Cancel
             </button>
           </>
+        )}
+      </div>
+      <div className="stack-tight">
+        <strong>Details</strong>
+        {t.info?.length > 0 ? (
+          <dl className="dl" data-testid="record-info">
+            {t.info.map((d: any) => (
+              <div key={d.id}>
+                <dt>
+                  {d.name}
+                  {d.print && <span className="muted small"> (on slip)</span>}
+                </dt>
+                <dd>{d.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <span className="muted small">No extra details yet.</span>
+        )}
+        <DetailRows rows={more} onChange={setMore} testid="record-detail" />
+        {more.length > 0 && (
+          <div>
+            <button className="btn btn-primary" onClick={async () => (await send({ details: more }, "Details added")) && setMore([])} data-testid="record-detail-save">
+              Save details
+            </button>
+          </div>
         )}
       </div>
       <div className="row nowrap">

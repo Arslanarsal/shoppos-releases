@@ -116,6 +116,42 @@ pub struct DocInput {
     pub lines: Vec<LineInput>,
     #[serde(default)]
     pub photos: Vec<crate::catalog::PhotoRef>,
+    #[serde(default)]
+    pub details: Vec<DetailInput>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct DetailInput {
+    pub name: String,
+    pub value: String,
+    #[serde(default)]
+    pub print: bool,
+}
+
+fn insert_txn_details(tx: &Connection, txn_id: i64, details: &[DetailInput]) -> Result<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    for d in details {
+        let (n, v) = (d.name.trim(), d.value.trim());
+        if n.is_empty() && v.is_empty() {
+            continue;
+        }
+        if n.is_empty() {
+            return user(format!("Give the detail \"{v}\" a name, like Phone or CNIC"));
+        }
+        if v.is_empty() {
+            return user(format!("Type a value for \"{n}\" or take it off"));
+        }
+        tx.execute("INSERT INTO txn_details(txn_id,name,value,print,created_at) VALUES(?1,?2,?3,?4,?5)", params![txn_id, n, v, d.print as i64, now])?;
+    }
+    Ok(())
+}
+
+pub fn detail_names(conn: &Connection) -> Result<Value> {
+    let names: Vec<String> = conn
+        .prepare("SELECT name FROM txn_details GROUP BY name COLLATE NOCASE ORDER BY COUNT(*) DESC, MAX(id) DESC LIMIT 50")?
+        .query_map([], |r| r.get(0))?
+        .collect::<std::result::Result<_, _>>()?;
+    Ok(json!(names))
 }
 
 fn insert_txn_photos(tx: &Connection, txn_id: i64, photos: &[crate::catalog::PhotoRef]) -> Result<()> {
@@ -330,6 +366,7 @@ pub fn purchase_post(conn: &mut Connection, d: &DocInput) -> Result<Value> {
         insert_move(&tx, txn_id, line_id, l.item_id, line_id, &date, l.qty, net, &date)?;
     }
     insert_txn_photos(&tx, txn_id, &d.photos)?;
+    insert_txn_details(&tx, txn_id, &d.details)?;
     tx.commit()?;
     txn_get(conn, txn_id)
 }
@@ -370,6 +407,7 @@ pub fn sale_post(conn: &mut Connection, d: &DocInput) -> Result<Value> {
         apply_plan(&tx, txn_id, line_id, l.item_id, &plan, &date)?;
     }
     insert_txn_photos(&tx, txn_id, &d.photos)?;
+    insert_txn_details(&tx, txn_id, &d.details)?;
     tx.commit()?;
     txn_get(conn, txn_id)
 }
@@ -724,6 +762,11 @@ pub fn txn_get(conn: &Connection, id: i64) -> Result<Value> {
         t["party"] = p["text"].clone();
     }
     t["extras"] = Value::Array(extras);
+    let info: Vec<Value> = conn
+        .prepare("SELECT id, name, value, print, created_at FROM txn_details WHERE txn_id=?1 ORDER BY id")?
+        .query_map([id], |r| Ok(json!({ "id": r.get::<_, i64>(0)?, "name": r.get::<_, String>(1)?, "value": r.get::<_, String>(2)?, "print": r.get::<_, i64>(3)? == 1, "created_at": r.get::<_, String>(4)? })))?
+        .collect::<std::result::Result<_, _>>()?;
+    t["info"] = Value::Array(info);
     let rev = conn
         .query_row("SELECT id, number, business_date, reason FROM txns WHERE kind='reversal' AND related_txn_id=?1", [id], |r| {
             Ok(json!({ "id": r.get::<_, i64>(0)?, "number": r.get::<_, String>(1)?, "business_date": r.get::<_, String>(2)?, "reason": r.get::<_, String>(3)? }))
@@ -768,6 +811,8 @@ pub struct TxnAddInput {
     pub note: String,
     #[serde(default)]
     pub party: Option<String>,
+    #[serde(default)]
+    pub details: Vec<DetailInput>,
 }
 
 pub fn txn_add(conn: &mut Connection, d: &TxnAddInput) -> Result<Value> {
@@ -776,10 +821,11 @@ pub fn txn_add(conn: &mut Connection, d: &TxnAddInput) -> Result<Value> {
     let now = chrono::Utc::now().to_rfc3339();
     let note = d.note.trim();
     let party = d.party.as_deref().map(str::trim);
-    if d.photos.is_empty() && note.is_empty() && party.is_none() {
+    if d.photos.is_empty() && note.is_empty() && party.is_none() && d.details.iter().all(|x| x.name.trim().is_empty() && x.value.trim().is_empty()) {
         return user("Nothing to add");
     }
     insert_txn_photos(&tx, d.txn_id, &d.photos)?;
+    insert_txn_details(&tx, d.txn_id, &d.details)?;
     if !note.is_empty() {
         tx.execute("INSERT INTO txn_extras(txn_id,kind,text,created_at) VALUES(?1,'note',?2,?3)", params![d.txn_id, note, now])?;
     }
@@ -792,7 +838,28 @@ pub fn txn_add(conn: &mut Connection, d: &TxnAddInput) -> Result<Value> {
 
 pub fn cost_preview(conn: &Connection, item_id: i64, qty: i64, date: &str) -> Result<Value> {
     match plan_fifo(conn, item_id, qty, date) {
-        Ok((plan, cost)) => Ok(json!({ "cost": cost, "lots": plan.iter().map(|(_, d, q, c)| json!({ "date": d, "qty": q, "cost": c })).collect::<Vec<_>>() })),
+        Ok((plan, cost)) => {
+            let mut lots = Vec::new();
+            for (line, d, q, c) in &plan {
+                let mut lot = json!({ "date": d, "qty": q, "cost": c });
+                if let Some(src) = lot_source(conn, *line)? {
+                    lot["source"] = src;
+                }
+                lots.push(lot);
+            }
+            Ok(json!({ "cost": cost, "lots": lots }))
+        }
         Err(_) => Ok(json!({ "cost": null, "lots": [] })),
     }
+}
+
+fn lot_source(conn: &Connection, lot_line_id: i64) -> Result<Option<Value>> {
+    let txn_id: Option<i64> = conn.query_row("SELECT txn_id FROM txn_lines WHERE id=?1", [lot_line_id], |r| r.get(0)).optional()?;
+    let Some(txn_id) = txn_id else { return Ok(None) };
+    let t = txn_get(conn, txn_id)?;
+    let notes: Vec<Value> = t["extras"].as_array().cloned().unwrap_or_default().into_iter().filter(|e| e["kind"] == "note").map(|e| e["text"].clone()).collect();
+    Ok(Some(json!({
+        "txn_id": txn_id, "kind": t["kind"], "number": t["number"], "business_date": t["business_date"], "party": t["party"],
+        "notes": t["notes"], "reason": t["reason"], "info": t["info"], "photos": t["photos"], "later_notes": notes,
+    })))
 }

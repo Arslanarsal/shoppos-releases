@@ -158,7 +158,7 @@ export default function ItemEdit(props: { id?: number; categoryId?: string | nul
         }
       }
       toast(editing ? "Item saved" : q ? `"${r.item.name}" added with ${q} in stock` : `"${r.item.name}" added`);
-      if (props.onSaved) props.onSaved(r);
+      if (props.onSaved) props.onSaved(await call("item_get", { id: r.item.id }).catch(() => r));
       else go(`/item/${r.item.id}`);
     } catch (e: any) {
       setError(e.message);

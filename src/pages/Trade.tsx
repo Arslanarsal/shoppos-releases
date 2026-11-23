@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { call, fileUrl, newToken, uploadImage } from "../api";
+import { Detail, DetailRows } from "../components/Details";
 import { displayValue } from "../components/Fields";
 import { ItemPicker, PickedItem, Receipt } from "../components/Pickers";
 import { date, money, moneyInput, parseMoney, parseQty, todayIso } from "../format";
@@ -22,8 +23,10 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
   const [error, setError] = useState("");
   const [done, setDone] = useState<any>(null);
   const [newItem, setNewItem] = useState(false);
+  const [editItem, setEditItem] = useState<number | null>(null);
   const submitting = useRef(false);
   const [photos, setPhotos] = useState<any[]>([]);
+  const [details, setDetails] = useState<Detail[]>([]);
   const [uploading, setUploading] = useState(0);
   const photoInput = useRef<HTMLInputElement>(null);
   const addPhotos = async (files: FileList | null) => {
@@ -126,6 +129,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
         discount: disc || 0,
         lines: lines.map((l, i) => ({ item_id: l.item.id, qty: calc[i].q, unit_price: calc[i].p, line_discount: calc[i].d })),
         photos,
+        details,
       });
       setConfirm(false);
       setDone(r);
@@ -145,6 +149,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
     setNotes("");
     setDiscount("");
     setPhotos([]);
+    setDetails([]);
     setDone(null);
     setToken(newToken());
     if (props.preset) go(sale ? "/sale" : "/purchase");
@@ -181,15 +186,17 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
             </div>
           </div>
         </div>
+        <div className="lbl">
+          <span className="lbl-text">More details (optional)</span>
+          <DetailRows rows={details} onChange={setDetails} testid="sale-detail" />
+        </div>
         <div className="row nowrap">
           <div className="grow">
             <ItemPicker onPick={add} forSale={sale} autoFocus />
           </div>
-          {!sale && (
-            <button className="btn" onClick={() => setNewItem(true)}>
-              + New item
-            </button>
-          )}
+          <button className="btn" onClick={() => setNewItem(true)} data-testid="trade-new-item">
+            + New item
+          </button>
         </div>
         <table className="table lines">
           <thead>
@@ -239,7 +246,14 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
               </tr>,
               <tr key={`${l.key}-info`} className="line-info-row no-print">
                 <td colSpan={6}>
-                  <LineInfo info={info[l.item.id]} cost={sale ? costs[`${l.item.id}:${calc[i].q}:${day}`] : undefined} amount={calc[i].ok ? calc[i].amount : null} qty={calc[i].q} sale={sale} />
+                  <LineInfo
+                    info={info[l.item.id]}
+                    cost={sale ? costs[`${l.item.id}:${calc[i].q}:${day}`] : undefined}
+                    amount={calc[i].ok ? calc[i].amount : null}
+                    qty={calc[i].q}
+                    sale={sale}
+                    onEdit={() => setEditItem(l.item.id)}
+                  />
                 </td>
               </tr>,
             ])}
@@ -325,6 +339,20 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
         </Modal>
       )}
 
+      {editItem !== null && (
+        <Modal title="Item details" onClose={() => setEditItem(null)} wide>
+          <ItemEdit
+            id={editItem}
+            onCancel={() => setEditItem(null)}
+            onSaved={(r) => {
+              const id = editItem;
+              setEditItem(null);
+              setInfo((x) => ({ ...x, [id]: r }));
+              setLines((ls) => ls.map((l) => (l.item.id === id ? { ...l, item: { ...l.item, name: r.item.name, identifier: r.item.identifier, photo: r.photos?.[0]?.file ?? l.item.photo } } : l)));
+            }}
+          />
+        </Modal>
+      )}
       {newItem && (
         <Modal title="New item" onClose={() => setNewItem(false)} wide>
           <ItemEdit
@@ -340,7 +368,7 @@ export default function TradePage(props: { mode: "sale" | "purchase"; preset?: s
   );
 }
 
-function LineInfo(props: { info: any; cost: any; amount: number | null; qty: number; sale: boolean }) {
+function LineInfo(props: { info: any; cost: any; amount: number | null; qty: number; sale: boolean; onEdit: () => void }) {
   const r = props.info;
   if (!r) return <div className="line-info muted small">Loading details...</div>;
   const filled = (r.fields as any[]).filter((f) => !f.archived && r.values[String(f.id)] !== undefined && r.values[String(f.id)] !== null && r.values[String(f.id)] !== "");
@@ -368,6 +396,15 @@ function LineInfo(props: { info: any; cost: any; amount: number | null; qty: num
             </span>
           )}
         </div>
+        <div>
+          <button type="button" className="btn btn-small" onClick={props.onEdit} data-testid="line-edit-item">
+            Add field / more details
+          </button>
+        </div>
+        {props.sale &&
+          lots
+            .filter((l) => l.source)
+            .map((l, k) => <LotSource key={k} lot={l} />)}
         {props.sale && (
           <div className="line-money">
             {cost === null || cost === undefined ? (
@@ -389,6 +426,58 @@ function LineInfo(props: { info: any; cost: any; amount: number | null; qty: num
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function LotSource(props: { lot: any }) {
+  const src = props.lot.source;
+  const what = src.kind === "purchase" ? "Purchase" : src.kind === "adjustment" ? "Stock added" : "Return";
+  return (
+    <div className="lot-source" data-testid="lot-source">
+      <div>
+        <b>
+          {what}{" "}
+          <a href={`#/txn/${src.txn_id}`} target="_blank" rel="noreferrer">
+            {src.number}
+          </a>
+        </b>{" "}
+        on {date(src.business_date)}
+        {src.party && <> from <b>{src.party}</b></>} · {props.lot.qty} pcs for {money(props.lot.cost)}
+      </div>
+      {(src.info?.length > 0 || src.notes || src.reason || src.later_notes?.length > 0) && (
+        <div className="chips">
+          {src.info?.map((d: any) => (
+            <span key={d.id} className="chip">
+              <b>{d.name}:</b> {d.value}
+            </span>
+          ))}
+          {src.notes && src.notes !== "Stock entered when the item was added" && (
+            <span className="chip">
+              <b>Notes:</b> {src.notes}
+            </span>
+          )}
+          {src.reason && (
+            <span className="chip">
+              <b>Reason:</b> {src.reason}
+            </span>
+          )}
+          {src.later_notes?.map((n: string, i: number) => (
+            <span key={i} className="chip">
+              {n}
+            </span>
+          ))}
+        </div>
+      )}
+      {src.photos?.length > 0 && (
+        <div className="lot-photos">
+          {src.photos.map((p: any) => (
+            <a key={p.id} href={fileUrl(p.file)} target="_blank" rel="noreferrer">
+              <img src={fileUrl(p.file)} alt={p.original_name} />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
