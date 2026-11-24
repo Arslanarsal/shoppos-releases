@@ -1,4 +1,5 @@
 import Icon from "./components/Icon";
+import LangSwitch from "./components/LangSwitch";
 import { ShowroomLogo, TractorDrawing } from "./components/TractorArt";
 import { PhotoHost } from "./components/PhotoViewer";
 import { useCallback, useEffect, useState } from "react";
@@ -185,6 +186,9 @@ function Main(props: { updateNote: string; migratedFrom: number | null }) {
           {!isTauri && <div className="dev-note">Browser test mode</div>}
         </aside>
         <main className="content">
+          <div className="topbar no-print">
+            <LangSwitch />
+          </div>
           <TractorDrawing variant={WATERMARK[route.path] ?? 0} className="app-watermark no-print" testid="app-watermark" />
           <BackupBanner />
           {page}

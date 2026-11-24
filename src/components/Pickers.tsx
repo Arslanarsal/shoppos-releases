@@ -140,7 +140,7 @@ export function Receipt(props: { txn: any }) {
                     {d.name}: {d.value}
                   </div>
                 ))}
-                <div className="r-detail">
+                <div className="r-detail r-qty">
                   {l.qty} x {m(l.unit_price)}
                   {l.line_discount > 0 && <> less {m(l.line_discount)}</>}
                 </div>

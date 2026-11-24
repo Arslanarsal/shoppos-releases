@@ -1,3 +1,4 @@
+import LangSwitch from "../components/LangSwitch";
 import { TractorDrawing } from "../components/TractorArt";
 import { useEffect, useState } from "react";
 import { call, isTauri, licenseActivate } from "../api";
@@ -27,6 +28,7 @@ export function Welcome(props: { onDone: () => void }) {
   return (
     <div className="boot">
       <TractorDrawing variant={1} className="app-watermark" />
+      <LangSwitch floating />
       <div className="boot-card wide">
         <h1>Welcome to ShopPOS</h1>
         {mode === "choose" && (
@@ -125,6 +127,7 @@ export function Problem(props: { state: any; onRetry: () => void }) {
   return (
     <div className="boot">
       <TractorDrawing variant={1} className="app-watermark" />
+      <LangSwitch floating />
       <div className="boot-card wide">
         <h1>{title}</h1>
         <div className="alert alert-warn">{st.message}</div>
@@ -186,6 +189,7 @@ export function Activate(props: { code: string; onDone: () => void }) {
   return (
     <div className="boot">
       <TractorDrawing variant={1} className="app-watermark" />
+      <LangSwitch floating />
       <div className="boot-card wide" data-testid="activate">
         <h1>This copy of ShopPOS is not activated</h1>
         <p>ShopPOS only works on activated computers. To use it on this computer, send this computer code to the person who set up ShopPOS for you:</p>
