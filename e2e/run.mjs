@@ -155,9 +155,18 @@ async function main() {
     await page.click('[data-testid="contact-add"]');
     await page.fill('[data-testid="contact-name-2"]', "Workshop");
     await page.fill('[data-testid="contact-phone-2"]', "042-3333333");
+    await page.click('[data-testid="group-add"]');
+    await page.fill('[data-testid="group-name-0"]', "Haji Bashir Ahmed");
+    await page.fill('[data-testid="group-phone-0-0"]', "0300-4444444");
+    await page.click('[data-testid="group-add-phone-0"]');
+    await page.fill('[data-testid="group-phone-0-1"]', "0333-5555555");
+    await page.click('[data-testid="group-add-phone-0"]');
+    await page.fill('[data-testid="group-phone-0-2"]', "042-6666666");
     await page.click('[data-testid="settings-save"]');
     await page.locator(".toast", { hasText: "Settings saved" }).waitFor();
     check((await api(portA, "settings_get", {})).data.contacts.length === 3, "3 contact numbers saved in settings, one name box and one number box each");
+    const grp = (await api(portA, "settings_get", {})).data.contact_groups;
+    check(grp.length === 1 && grp[0].name === "Haji Bashir Ahmed" && grp[0].phones.length === 3, "one name with 3 numbers saved");
 
     step = "A categories";
     await page.goto(base + "#/categories");
@@ -310,6 +319,8 @@ async function main() {
     const rtext = await page.textContent('[data-testid="receipt"]');
     check(rtext.includes("Arslan Furniture and Bikes") && rtext.includes("Rs 36,000") && rtext.includes("Bilal"), "branded receipt with total");
     check(rtext.includes("Ali Raza Owner: 0300-1111111") && rtext.includes("Usman Sales Manager: 0321-2222222") && rtext.includes("Workshop: 042-3333333") && (await page.locator('[data-testid^="contact-title"]').count()) === 0, "all contact numbers printed on the receipt as typed");
+    const gtext = await page.textContent('[data-testid="r-groups"]');
+    check(gtext.includes("Haji Bashir Ahmed") && gtext.includes("0300-4444444") && gtext.includes("0333-5555555") && gtext.includes("042-6666666") && rtext.includes("Ali Raza Owner: 0300-1111111"), "name with its numbers printed at the bottom of the receipt, other numbers still at the top");
     check(rtext.includes("Thank you for your business") && rtext.includes("manufacturer's terms") && !rtext.includes("shopping with us"), "professional footer on the receipt");
     check(!rtext.includes("8,000") && !rtext.includes("12,000 profit") && !rtext.includes("Profit"), "buy price and profit are not on the slip");
     check(rtext.includes("Phone: 0300-1234567") && !rtext.includes("35202"), "ticked detail printed on the slip, the unticked one kept private");

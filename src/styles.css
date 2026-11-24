@@ -1592,3 +1592,32 @@ html[dir="rtl"] .r-qty {
   direction: ltr;
   text-align: right;
 }
+
+.group-box {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.group-phone {
+  padding-inline-start: 1.5rem;
+}
+.r-groups {
+  margin-top: 0.8rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #999;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1.4rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.r-group-name {
+  font-weight: 700;
+}
+.r-group-phone {
+  direction: ltr;
+}

@@ -13,6 +13,7 @@ export type Settings = {
   receipt_show_logo: boolean;
   receipt_watermark: boolean;
   contacts: { name: string; title: string; phone: string }[];
+  contact_groups: { name: string; phones: string[] }[];
   theme: "light" | "dark";
   accent: string;
   font_scale: number;

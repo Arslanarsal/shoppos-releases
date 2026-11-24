@@ -149,6 +149,7 @@ export default function SettingsPage(props: { tab: string }) {
             </Label>
           </div>
           <ContactsEditor rows={s.contacts ?? []} onChange={(contacts) => set({ contacts })} />
+          <GroupsEditor rows={s.contact_groups ?? []} onChange={(contact_groups) => set({ contact_groups })} />
           <div className="row">
             <Label text="Money sign">
               <input value={s.currency_symbol} onChange={(e) => set({ currency_symbol: e.target.value })} style={{ width: 100 }} />
@@ -377,6 +378,51 @@ function ContactsEditor(props: { rows: { name: string; title: string; phone: str
       <div>
         <button type="button" className="btn btn-small" onClick={() => props.onChange([...rows, { name: "", title: "", phone: "" }])} data-testid="contact-add">
           + Add a number
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GroupsEditor(props: { rows: { name: string; phones: string[] }[]; onChange: (rows: { name: string; phones: string[] }[]) => void }) {
+  const rows = props.rows;
+  const setRow = (i: number, r: { name: string; phones: string[] }) => props.onChange(rows.map((x, j) => (j === i ? r : x)));
+  return (
+    <div className="stack-tight" data-testid="groups">
+      <span className="lbl-text">One name with many numbers (printed at the bottom of every receipt)</span>
+      {rows.map((r, i) => (
+        <div key={i} className="group-box" data-testid={`group-${i}`}>
+          <div className="detail-row">
+            <input className="grow" value={r.name} onChange={(e) => setRow(i, { ...r, name: e.target.value })} placeholder="Name" data-testid={`group-name-${i}`} />
+            <button type="button" className="btn btn-ghost" aria-label="Take off this name and its numbers" onClick={() => props.onChange(rows.filter((_, j) => j !== i))}>
+              ✕
+            </button>
+          </div>
+          {r.phones.map((ph, k) => (
+            <div key={k} className="detail-row group-phone">
+              <input
+                className="grow"
+                value={ph}
+                onChange={(e) => setRow(i, { ...r, phones: r.phones.map((x, m) => (m === k ? e.target.value : x)) })}
+                placeholder="Phone number"
+                inputMode="tel"
+                data-testid={`group-phone-${i}-${k}`}
+              />
+              <button type="button" className="btn btn-ghost" aria-label="Take off this number" onClick={() => setRow(i, { ...r, phones: r.phones.filter((_, m) => m !== k) })}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="group-phone">
+            <button type="button" className="btn btn-small" onClick={() => setRow(i, { ...r, phones: [...r.phones, ""] })} data-testid={`group-add-phone-${i}`}>
+              + Add another number
+            </button>
+          </div>
+        </div>
+      ))}
+      <div>
+        <button type="button" className="btn btn-small" onClick={() => props.onChange([...rows, { name: "", phones: [""] }])} data-testid="group-add">
+          + Add a name with numbers
         </button>
       </div>
     </div>

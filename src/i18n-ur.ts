@@ -1,4 +1,8 @@
 export const UR: Record<string, string> = {
+  "One name with many numbers (printed at the bottom of every receipt)": "ایک نام کے ساتھ کئی نمبر (ہر رسید کے نیچے چھپیں گے)",
+  "+ Add another number": "+ ایک اور نمبر",
+  "+ Add a name with numbers": "+ نام اور نمبر شامل کریں",
+  "Take off this name and its numbers": "یہ نام اور اس کے نمبر ہٹائیں",
   "at": "بحساب",
   "for": "بعوض",
   "to": "تا",

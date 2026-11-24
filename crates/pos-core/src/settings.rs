@@ -19,6 +19,7 @@ pub fn defaults() -> Value {
         "receipt_show_logo": true,
         "receipt_watermark": true,
         "contacts": [],
+        "contact_groups": [],
         "theme": "light",
         "accent": "#1d4ed8",
         "font_scale": 1.0,
@@ -30,7 +31,7 @@ pub fn defaults() -> Value {
 
 const ALLOWED: &[&str] = &[
     "shop_name", "shop_logo", "shop_address", "shop_phone", "shop_email", "currency_symbol", "currency_code",
-    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "receipt_watermark", "contacts", "theme", "accent",
+    "money_decimals", "date_format", "receipt_header", "receipt_footer", "receipt_show_logo", "receipt_watermark", "contacts", "contact_groups", "theme", "accent",
     "font_scale", "backup_dest", "backup_interval_minutes",
 ];
 
@@ -87,6 +88,20 @@ fn sanitize(k: &str, v: Value) -> Value {
         "font_scale" => json!(v.as_f64().unwrap_or(1.0).clamp(0.9, 1.5)),
         "backup_interval_minutes" => json!(v.as_i64().unwrap_or(60).clamp(5, 24 * 60)),
         "receipt_show_logo" | "receipt_watermark" => json!(v.as_bool().unwrap_or(true)),
+        "contact_groups" => {
+            let rows = v.as_array().cloned().unwrap_or_default();
+            let txt = |x: &Value| x.as_str().unwrap_or("").trim().chars().take(80).collect::<String>();
+            Value::Array(
+                rows.iter()
+                    .map(|r| {
+                        let phones: Vec<Value> = r.get("phones").and_then(|p| p.as_array()).cloned().unwrap_or_default().iter().map(txt).filter(|p| !p.is_empty()).take(30).map(Value::String).collect();
+                        json!({ "name": txt(r.get("name").unwrap_or(&Value::Null)), "phones": phones })
+                    })
+                    .filter(|r| r["name"] != "" || r["phones"].as_array().is_some_and(|a| !a.is_empty()))
+                    .take(20)
+                    .collect(),
+            )
+        }
         "contacts" => {
             let rows = v.as_array().cloned().unwrap_or_default();
             let clean = |x: &Value, k: &str| x.get(k).and_then(|s| s.as_str()).unwrap_or("").trim().chars().take(80).collect::<String>();
@@ -114,6 +129,6 @@ pub fn receipt_snapshot(conn: &Connection) -> Result<Value> {
         "shop_name": pick("shop_name"), "shop_logo": pick("shop_logo"), "shop_address": pick("shop_address"),
         "shop_phone": pick("shop_phone"), "shop_email": pick("shop_email"), "currency_symbol": pick("currency_symbol"),
         "money_decimals": pick("money_decimals"), "date_format": pick("date_format"), "receipt_header": pick("receipt_header"),
-        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "receipt_watermark": pick("receipt_watermark"), "contacts": pick("contacts"), "accent": pick("accent")
+        "receipt_footer": pick("receipt_footer"), "receipt_show_logo": pick("receipt_show_logo"), "receipt_watermark": pick("receipt_watermark"), "contacts": pick("contacts"), "contact_groups": pick("contact_groups"), "accent": pick("accent")
     }))
 }

@@ -169,6 +169,20 @@ export function Receipt(props: { txn: any }) {
         </div>
       </div>
       {t.notes && t.kind !== "return" && t.kind !== "reversal" && <div className="r-note">{t.notes}</div>}
+      {Array.isArray(s.contact_groups) && s.contact_groups.length > 0 && (
+        <div className="r-groups" data-testid="r-groups">
+          {s.contact_groups.map((g: any, i: number) => (
+            <div key={i} className="r-group">
+              {g.name && <div className="r-group-name">{g.name}</div>}
+              {(g.phones ?? []).map((p: string, k: number) => (
+                <div key={k} className="r-group-phone">
+                  {p}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
       {s.receipt_footer && <div className="r-foot">{s.receipt_footer}</div>}
     </div>
   );
