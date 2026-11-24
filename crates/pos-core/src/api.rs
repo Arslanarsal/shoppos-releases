@@ -20,6 +20,7 @@ pub struct Core {
     conn: Mutex<Option<Connection>>,
     state: Mutex<Value>,
     bk: Mutex<()>,
+    auto_dir: Mutex<Option<PathBuf>>,
 }
 
 const MAX_UPLOAD: usize = 40 * 1024 * 1024;
@@ -61,6 +62,7 @@ impl Core {
             conn: Mutex::new(None),
             state: Mutex::new(json!({ "state": "closed" })),
             bk: Mutex::new(()),
+            auto_dir: Mutex::new(None),
 
         }
     }
@@ -182,6 +184,14 @@ impl Core {
         Ok(self.open())
     }
 
+    pub fn set_auto_backup_dir(&self, dir: Option<PathBuf>) {
+        *self.auto_dir.lock().unwrap_or_else(|e| e.into_inner()) = dir;
+    }
+
+    fn auto_backup_dir(&self) -> Option<PathBuf> {
+        self.auto_dir.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
     fn reader(&self) -> Result<Connection> {
         self.with_conn(|_| Ok(()))?;
         db::open_reader(&self.db_path())
@@ -245,6 +255,11 @@ impl Core {
                 let _ = backup::export_quick(&r, &self.data_dir, &local, &self.app_version);
             }
         }
+        if let Some(auto) = self.auto_backup_dir() {
+            if auto != dest && std::fs::create_dir_all(&auto).is_ok() {
+                let _ = backup::export_quick(&r, &self.data_dir, &auto, &self.app_version);
+            }
+        }
         let _ = r.execute_batch("COMMIT");
         res
     }
@@ -259,6 +274,7 @@ impl Core {
         let deep_due = last_deep.is_none_or(|l| (chrono::Utc::now() - l.with_timezone(&chrono::Utc)).num_days() >= 7);
         st["dest"] = json!(dest.display().to_string());
         st["dest_chosen"] = json!(chosen);
+        st["auto_dir"] = json!(self.auto_backup_dir().map(|p| p.display().to_string()));
         st["dest_available"] = json!(dest.is_dir() || !chosen);
         st["interval_minutes"] = json!(interval);
         st["minutes_since_success"] = json!(age_min);

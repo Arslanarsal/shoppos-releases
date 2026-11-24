@@ -305,6 +305,9 @@ export default function SettingsPage(props: { tab: string }) {
               Restore from a backup...
             </button>
           </div>
+          <div className="alert alert-ok" data-testid="auto-backups">
+            <strong>Automatic copies, nothing to choose:</strong> every backup is also saved in {backup?.auto_dir ? <code>{backup.auto_dir}</code> : "a second folder on this computer"} and in the protected folder <code>C:\ProgramData\ShopPOS Vault</code>. Removing ShopPOS never deletes your shop data or these copies.
+          </div>
           <h3>Export or move your data</h3>
           <p>
             Your shop data always stays on this computer. If you want a copy somewhere else (another drive, a new computer), save a full copy. Open ShopPOS on the other computer and choose

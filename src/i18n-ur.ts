@@ -1,4 +1,9 @@
 export const UR: Record<string, string> = {
+  "Automatic copies, nothing to choose:": "خودکار کاپیاں، کچھ چننے کی ضرورت نہیں:",
+  "every backup is also saved in": "ہر بیک اپ یہاں بھی محفوظ ہوتا ہے",
+  "and in the protected folder": "اور محفوظ فولڈر میں",
+  "a second folder on this computer": "اس کمپیوٹر پر دوسرا فولڈر",
+  ". Removing ShopPOS never deletes your shop data or these copies.": "۔ ShopPOS ہٹانے سے آپ کا ڈیٹا یا یہ کاپیاں کبھی حذف نہیں ہوتیں۔",
   "One name with many numbers (printed at the bottom of every receipt)": "ایک نام کے ساتھ کئی نمبر (ہر رسید کے نیچے چھپیں گے)",
   "+ Add another number": "+ ایک اور نمبر",
   "+ Add a name with numbers": "+ نام اور نمبر شامل کریں",

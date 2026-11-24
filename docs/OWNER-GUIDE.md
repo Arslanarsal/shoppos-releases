@@ -65,6 +65,8 @@ Keep the USB drive somewhere safe. A second drive kept at home is even better: p
 
 ## Viruses and safety
 
+- Every backup is also saved automatically in `C:\ShopPOS Backups`, even if you never choose a backup drive. If the shop data folder is ever deleted, open ShopPOS, choose **Restore from backup** and pick that folder.
+- Removing (uninstalling) ShopPOS never deletes your shop data or any backups.
 - The app keeps a checked copy of your shop every hour on this computer, even when a USB drive is chosen.
 - Windows also copies every backup into a locked folder, `C:\ProgramData\ShopPOS Vault`. Normal programs, and viruses that run as you, cannot change or delete it. To use it: **Settings, Backups, Restore from a backup**, and choose that folder.
 - The USB drive is still the best protection. Unplug it after the backup and keep it safe; a virus cannot reach a drive that is not plugged in.

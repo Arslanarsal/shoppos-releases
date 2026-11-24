@@ -42,6 +42,21 @@ fn machine_id() -> String {
     }
 }
 
+fn auto_backup_dir() -> Option<std::path::PathBuf> {
+    if let Ok(d) = std::env::var("SHOPPOS_AUTO_BACKUP_DIR") {
+        return if d.is_empty() { None } else { Some(d.into()) };
+    }
+    #[cfg(windows)]
+    {
+        let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        Some(std::path::PathBuf::from(format!("{drive}\\ShopPOS Backups")))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 fn license_dir(core: &Core) -> std::path::PathBuf {
     core.data_dir.parent().map(|p| p.join("ShopPOS License")).unwrap_or_else(|| core.data_dir.join("license"))
 }
@@ -162,6 +177,7 @@ pub fn run() {
         .register_uri_scheme_protocol("shopfile", move |_ctx, req| serve_file(&for_files, req.uri().path()))
         .setup(move |app| {
             let c = for_backup.clone();
+            c.set_auto_backup_dir(auto_backup_dir());
             std::thread::spawn(move || loop {
                 std::thread::sleep(Duration::from_secs(300));
                 if c.is_open() {

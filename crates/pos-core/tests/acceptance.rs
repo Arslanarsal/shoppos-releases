@@ -720,3 +720,25 @@ fn tractor_setup_adds_fields_once_and_models_can_be_added() {
     ok(&core, "item_save", json!({ "id": t1, "category_id": cat, "name": "T1 renamed", "tracking": "unique", "values": { ch.clone(): "MF-001" } }));
     assert_eq!(ok(&core, "item_search", json!({ "text": "T2" }))["total"], 0, "a refused item is not saved");
 }
+
+#[test]
+fn automatic_second_backup_folder_without_choosing_anything() {
+    let dir = tempfile::tempdir().unwrap();
+    let auto = dir.path().join("C-ShopPOS Backups");
+    let core = new_shop(&dir.path().join("data"));
+    core.set_auto_backup_dir(Some(auto.clone()));
+    let (_, desk) = setup_desks(&core);
+    ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 3, "unit_price": 100 }] }));
+    ok(&core, "backup_now", json!({ "deep": false }));
+    let st = ok(&core, "backup_status", json!({}));
+    assert_eq!(st["dest_chosen"], false);
+    assert_eq!(st["auto_dir"], auto.display().to_string());
+    let found = ok(&core, "restore_find", json!({ "path": auto.display().to_string() }));
+    assert!(found.as_array().is_some_and(|a| !a.is_empty()), "automatic folder made and holds a checked backup");
+    std::fs::remove_dir_all(dir.path().join("data")).unwrap();
+    let fresh = Core::new(&dir.path().join("new-pc"), "1.0.0-test");
+    fresh.open();
+    let snap = found[0]["path"].as_str().unwrap();
+    ok(&fresh, "restore_apply", json!({ "path": snap }));
+    assert_eq!(ok(&fresh, "item_search", json!({ "text": "Desk" }))["rows"][0]["stock"], 3, "shop comes back from the automatic folder even after the data folder was deleted");
+}
