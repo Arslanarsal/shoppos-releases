@@ -735,6 +735,8 @@ fn automatic_second_backup_folder_without_choosing_anything() {
     assert_eq!(st["auto_dir"], auto.display().to_string());
     let found = ok(&core, "restore_find", json!({ "path": auto.display().to_string() }));
     assert!(found.as_array().is_some_and(|a| !a.is_empty()), "automatic folder made and holds a checked backup");
+    core.close();
+    drop(core);
     std::fs::remove_dir_all(dir.path().join("data")).unwrap();
     let fresh = Core::new(&dir.path().join("new-pc"), "1.0.0-test");
     fresh.open();
