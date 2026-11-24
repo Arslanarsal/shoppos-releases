@@ -726,7 +726,10 @@ fn automatic_second_backup_folder_without_choosing_anything() {
     let dir = tempfile::tempdir().unwrap();
     let auto = dir.path().join("C-ShopPOS Backups");
     let core = new_shop(&dir.path().join("data"));
+    ok(&core, "backup_now", json!({ "deep": false }));
+    assert_eq!(ok(&core, "backup_status", json!({}))["due"], false);
     core.set_auto_backup_dir(Some(auto.clone()));
+    assert_eq!(ok(&core, "backup_status", json!({}))["due"], true, "an empty automatic folder makes a backup due straight away");
     let (_, desk) = setup_desks(&core);
     ok(&core, "purchase_post", json!({ "client_token": tok(), "business_date": "2026-03-01", "lines": [{ "item_id": desk, "qty": 3, "unit_price": 100 }] }));
     ok(&core, "backup_now", json!({ "deep": false }));

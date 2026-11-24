@@ -278,7 +278,8 @@ impl Core {
         st["dest_available"] = json!(dest.is_dir() || !chosen);
         st["interval_minutes"] = json!(interval);
         st["minutes_since_success"] = json!(age_min);
-        st["due"] = json!(age_min.is_none_or(|a| a >= interval));
+        let auto_empty = self.auto_backup_dir().is_some_and(|d| backup::find_snapshots(&d).map(|v| v.is_empty()).unwrap_or(true));
+        st["due"] = json!(age_min.is_none_or(|a| a >= interval) || auto_empty);
         st["deep_due"] = json!(deep_due);
         Ok(st)
     }
